@@ -1,0 +1,19 @@
+language: julia
+
+os:
+  - linux
+
+julia:
+  - 1.2
+  
+notifications:
+  email: false
+ 
+before_install:
+   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+
+script:
+  
+
+after_success:
+  - julia --check-bounds=yes --color=yes -e 'using Pkg; Pkg.test(coverage=true);'
