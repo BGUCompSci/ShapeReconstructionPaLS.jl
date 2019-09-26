@@ -23,7 +23,6 @@ export getSensTMatVec
 function getSensTMatVec(v::Vector,m::Vector,pFor::DipParam)
 JtV = 0;
 if pFor.method == MATFree
-	println("NOT TESTED!!!")
 	Mesh = pFor.Mesh;
 	n = Mesh.n;
 	theta_phi = pFor.theta_phi_rad;
@@ -41,8 +40,6 @@ if pFor.method == MATFree
 		(mr,XT,XTT) = rotateAndMove3D(u,theta_phi[ii,:],(b[ii,:]./Mesh.h),doTranspose);
 		JtV .+= mr[:];
 	end
-# elseif pFor.method == RBFBased || pFor.method == RBF10Based
-	# error("TODO: Check this!!")
 else
 	S = pFor.Jacobian;
 	JtV = S*v[:];

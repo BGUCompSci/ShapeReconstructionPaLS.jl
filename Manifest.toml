@@ -118,8 +118,8 @@ uuid = "ccf9b6e2-7ea7-596a-9d65-09863b18e8cc"
 version = "0.1.1"
 
 [[ParamLevelSet]]
-deps = ["LinearAlgebra", "SparseArrays", "jInv"]
-git-tree-sha1 = "3fb26d3fae9d26a04bec8ca5876a428450e68fb1"
+deps = ["LinearAlgebra", "SparseArrays", "Test", "jInv"]
+git-tree-sha1 = "a5de197da31ab04c6b5682e8ee37c9db9899f8e1"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaInv/ParamLevelSet.jl.git"
 uuid = "8d29aade-bbbb-4e96-8513-97d62a9e81a0"

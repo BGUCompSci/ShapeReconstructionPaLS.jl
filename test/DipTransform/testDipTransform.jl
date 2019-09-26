@@ -51,11 +51,10 @@ D[k] = arrangeRemoteCallDataIntoLocalData(Dremote);
 println("All these should be approx 0")
 for k=3:5
 	r = norm(D[k] - D[2])./norm(D[2]);
-	println(r);
 	if r > 5e-1
 		println("testGetData: Get data is not the same in all methods");
 	end
-	@test r < 5e-1
+	@test r < 5e-1;
 end
 
 
@@ -66,7 +65,6 @@ for k=1:2
 	pFor = getDipParam(Mesh,theta_phi,b,samplingBinning,1,methods[k]);
 	Dremote,pFor = getData(u[:],pFor);
 	Dk = arrangeRemoteCallDataIntoLocalData(Dremote);
-	println("Done!",norm(u))
 	
 	ui = u; # not sure why this is needed. Otherwise julia do not recognise u in the loop
 	for ii = 1:3
@@ -85,23 +83,14 @@ for k=1:2
 		d1 = sampleSlices(ui,0.01,1);
 		t1 = randn(size(d1));
 		sampleSlicesT(t1,0.01,u1);
-		@test abs(dot(t1,d1) - dot(u1,ui)) < 1e-5
-		if abs(dot(t1,d1) - dot(u1,ui)) > 1e-5
-			print("Sens transpose failed");
-		end	
+		@test abs(dot(t1,d1) - dot(u1,ui)) < 1e-5	
 		
 		Vd = randn(size(Dk_t));
 		vm = randn(size(dm));
 		val1 = dot(getSensMatVec(vm,ui[:],fetch(pFor[1]))[:],Vd);
-		println(val1)
 		val2 = dot(getSensTMatVec(Vd[:],ui[:],fetch(pFor[1]))[:],vm);
-		println(val2)
-		if k < 2
-			@test abs(val1-val2) < 1e-5
-			if abs(val1-val2) > 1e-5
-				println("Traspose test not right!!!!")
-			end
-		end
+		println(methods[k])
+		@test abs(val1-val2) < 1e-5	
 	end
 end
 dmm = 0.05*randn(size(m));

@@ -2,11 +2,8 @@ module Utils
 using jInv.Mesh
 using SparseArrays
 using Distributed
-#include("rotation3D.jl")
 include("synthModels.jl")
 include("jointStuff.jl")
-# include("ndgrid.jl")
-# export ndgrid, meshgrid
 
 export MATBased,MATFree,RBFBasedSimple1,RBFBasedSimple2,RBF10BasedSimple1, RBF10BasedSimple2,RBFBased,RBF10Based,RBF5Based;
 MATBased        = "matrix";
