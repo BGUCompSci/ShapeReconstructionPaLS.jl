@@ -20,7 +20,7 @@ if pFor.method == MATFree
 	XTT = zeros(0);
 	b = zeros(nshots,3);
 	for ii = 1:nshots
-		(vr,XT,XTT) = rotateAndMove3D(v,pFor.theta_phi_rad[ii,:],b[ii,:],vr,XT,XTT);
+		(vr,XT,XTT) = rotateAndMove3D(v,pFor.theta_phi_rad[ii,:],b[ii,:],false,vr,XT,XTT);
 		# d[:,ii] = pFor.SampleMatT'*vr[:];
 		d[:,ii] = softMaxSensMatVec(pFor.SampleMatT,m,vr[:]);
 	end

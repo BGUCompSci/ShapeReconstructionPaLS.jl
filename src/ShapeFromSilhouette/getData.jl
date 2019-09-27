@@ -1,7 +1,7 @@
 using SparseArrays
-
-SigmoidFunc(x) =(0.5*tanh.(5*(x-0.5))+0.5 + (1-0.5*tanh.(5*(1-0.5))-0.5).*2 .*(x-0.5));
-dsigmoidFunc(x) = 0.0133857 + 2.5*((sech.(5*(-0.5 + x))).^2);
+using LinearAlgebra
+SigmoidFunc(x) =(0.5*tanh.(5*(x.-0.5)).+0.5 .+ (1-0.5*tanh.(5*(1-0.5))-0.5).*2 .*(x.-0.5));
+dsigmoidFunc(x) = 0.0133857 .+ 2.5*((sech.(5*(-0.5 .+ x))).^2);
 export getData
 function getData(m::Array,pFor::SfSParam,doClear::Bool=false)
 d = 0;
@@ -164,7 +164,8 @@ for ii = 1:nshots
 	# d[:,ii] = dii;
 	Jacobians[ii] = Jii;
 end
-JacT = blkdiag(Jacobians...);
+#JacT = blkdiag(Jacobians...);
+JacT = blockdiag(Jacobians...);
 # JacT = 0.0;
 return d,JacT
 end
@@ -191,7 +192,7 @@ function softMaxSensMatVec(Proj::SparseMatrixCSC,u::Vector{Float64},vec::Vector{
 	Av = Proj'*v;
 	dy = etta*y;
 	dv = etta*y.*u + y;
-	AYinv = 1.0./(Ay + 1e-10);
+	AYinv = 1.0./(Ay .+ 1e-10);
 	# Jt = spdiagm(dv)*Proj*spdiagm(AYinv) - spdiagm(dy)*Proj*spdiagm(AYinv.*AYinv.*Av);
 	Jvec = AYinv.*(Proj'*(dv.*vec)) - AYinv.*AYinv.*Av.*(Proj'*(dy.*vec))
 	return Jvec;
@@ -205,9 +206,12 @@ function softMaxProjWithSigmoid(Proj::SparseMatrixCSC,u::Vector{Float64})
 	Rays = u.*Proj;
 	#ans=zeros(size(Rays,2));
 	#Iterate over the rays:
-	d  = diff(Rays);
-	indices = find(d.<0);
-	indices = indices .+ 1 ;
+	d  = diff(Rays,dims = 1);
+	#indices = find(d.<0);
+	indices = findall(x -> x .< 0, d);
+	#print(indices)
+	#indices = Int64(indices)
+	#indices = indices .+ 1 ;
 
 	#Proj[deleteat!(collect(1:length(Proj)),indices)] = 0;
 	Proj[indices] .= 0;
@@ -254,7 +258,7 @@ function softMaxProjWithSigmoid(Proj::SparseMatrixCSC,u::Vector{Float64})
 	Av = Proj'*v;
 	dy = etta*y;
 	dv = etta*y.*u + y;
-	AYinv = 1.0./(Ay + 1e-10);
+	AYinv = 1.0./(Ay .+ 1e-10);
 	ans2 = SigmoidFunc(Av.*AYinv);
 	
 	#Test for answer:
@@ -295,7 +299,7 @@ function softMaxProjWithSensMat(Proj::SparseMatrixCSC,u::Vector{Float64})
 	
 	dy = etta*y;
 	dv = etta*y.*u + y;
-	AYinv = 1.0./(Ay + 1e-10);
+	AYinv = 1.0./(Ay .+ 1e-10);
 	# The code below does this line only much faster:
 	# Jt = spdiagm(dv)*Proj*spdiagm(AYinv) - spdiagm(dy)*Proj*spdiagm(AYinv.*AYinv.*Av);
 	Jtt = copy(Proj);

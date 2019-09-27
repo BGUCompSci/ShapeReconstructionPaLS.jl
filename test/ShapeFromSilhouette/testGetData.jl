@@ -6,6 +6,7 @@ using ParamLevelSet
 using ShapeReconstructionPaLS.ShapeFromSilhouette;
 using Statistics
 using Distributed
+using LinearAlgebra
 
 
 println("Testing getData for all the methods:")
@@ -42,6 +43,7 @@ for k=1:1
 end
 
 for k= 2
+	println("start RBFBasedSimple2")
 	pFor = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],nworkers());
 	Dremote, = getData(m[:],pFor);
 	D[k] = arrangeRemoteCallDataIntoLocalData(Dremote);
@@ -49,7 +51,9 @@ for k= 2
 end
 k=3
 m_wraped = wrapRBFparamAndRotationsTranslations(m,theta_phi,0.0*b)
-pFor = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],nworkers());
+#pFor = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],nworkers());
+pFor = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],nworkers());
+
 Dremote, = getData(m_wraped[:],pFor);
 D[k] = arrangeRemoteCallDataIntoLocalData(Dremote);
 
@@ -63,7 +67,7 @@ println("Done!")
 # figure(); imshow(reshape(D[1][:,1],tuple(ScreenMeshX2X3.n...)));
 println("All these should be approx 0")
 for k=2:length(D)
-	r = vecnorm(D[k] - D[1])./vecnorm(D[1]);
+	r = norm(D[k] - D[1])./norm(D[1]);
 	println(r);
 	# figure(); imshow(reshape(D[k][:,1],tuple(ScreenMeshX2X3.n...)))
 	if r > 1e-1
@@ -76,14 +80,14 @@ println("Testing Sensitivities:");
 
 du = 0.1*randn(size(u));
 for k=1
-	pFor = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
+	pFor = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
 	Dremote,pFor = getData(u[:],pFor);
 	Dk = arrangeRemoteCallDataIntoLocalData(Dremote);
 	println("Done!")
 	
 	for ii = 1:8
 		dm = (0.5^ii)*du;
-		pFor_t = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
+		pFor_t = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
 		Dremote, = getData(u[:] + dm[:],pFor_t);
 		Dk_t = arrangeRemoteCallDataIntoLocalData(Dremote);
 		println("norm(dt-d0): ",norm(Dk_t[:]-Dk[:]),", norm(dt - d0 - J0*dm): ",norm(Dk_t[:] - Dk[:] - getSensMatVec(dm[:],u[:],fetch(pFor[1]))[:]));
@@ -91,14 +95,14 @@ for k=1
 end
 dmm = 0.05*randn(size(m));
 for k = 2
-	pFor = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
+	pFor = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
 	Dremote, = getData(m[:],pFor);
 	Dk = arrangeRemoteCallDataIntoLocalData(Dremote);
 	println("Done!")
 	
 	for ii = 1:8
 		dm = (0.5^ii)*dmm;
-		pFor_t = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
+		pFor_t = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
 		Dremote, = getData(m[:] + dm[:],pFor_t);
 		Dk_t = arrangeRemoteCallDataIntoLocalData(Dremote);
 		println("norm(dt-d0): ",norm(Dk_t[:]-Dk[:]),", norm(dt - d0 - J0*dm): ",norm(Dk_t[:] - Dk[:] - getSensMatVec(dm[:],m[:],fetch(pFor[1]))[:]));
@@ -107,7 +111,7 @@ end
 k=3
 m_wraped = wrapRBFparamAndRotationsTranslations(m,theta_phi,0.0*b)
 dm_wraped = wrapRBFparamAndRotationsTranslations(dmm,0.05*randn(size(theta_phi)),0.05*randn(size(b)));
-pFor = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
+pFor = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
 Dremote, = getData(m_wraped[:],pFor);
 Dk = arrangeRemoteCallDataIntoLocalData(Dremote);
 V = 0;
@@ -115,7 +119,7 @@ println("Done!")
 
 for ii = 1:8
 	dm = (0.5^ii)*dm_wraped;
-	pFor_t = getVisHullParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
+	pFor_t = getSfSParam(Mesh,theta_phi,b,ScreenMeshX2X3,XScreenLoc,CamLoc,methods[k],1);
 	Dremote, = getData(m_wraped[:] + dm[:],pFor_t);
 	Dk_t = arrangeRemoteCallDataIntoLocalData(Dremote);
 	V = getSensMatVec(dm[:],m_wraped[:],fetch(pFor[1]))[:];
