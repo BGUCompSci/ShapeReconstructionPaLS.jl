@@ -1,4 +1,4 @@
-
+import LinearAlgebra
 ### matrix free S (slicing) matrix
 
 function binfunc(ii::Int32,binFactor::Int32)
@@ -122,7 +122,7 @@ for ii = 1:ndips
 	Jacobians[ii] = sparse(J1,I1,V1,lengthRBFparams,traceLength);
 	(Jacobians[ii].nzval).*=volCell;
 end
-JacT = blkdiag(Jacobians...);
+JacT = blockdiag(Jacobians...);
 # JacT = 0.0;
 
 return d,JacT

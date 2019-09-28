@@ -1,6 +1,6 @@
 import jInv.ForwardShare.getSensMat
 function getSensMat(m::Vector,pFor::DirectParam)
-	return pFor.Jacobian';
+	return pFor.Jacobian;
 end
 
 

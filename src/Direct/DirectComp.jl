@@ -1,12 +1,13 @@
-module DirectComp
+module Direct
 	
 using jInv.Mesh
 using jInv.Utils
 using jInv.InverseSolve
-using VolReconstruction.Utils
-using VolReconstruction.ParamLevelSet
+using ShapeReconstructionPaLS.Utils
+using ShapeReconstructionPaLS.ParamLevelSet
 using MAT
 using SparseArrays
+using Distributed
 import jInv.ForwardShare.getData
 import jInv.ForwardShare.getSensTMatVec
 import jInv.ForwardShare.getSensMatVec
@@ -43,29 +44,34 @@ function getDirectParam(Mesh::RegularMesh,samplingBinning::Int64,numWorkers::Int
 	if numWorkers > nworkers()
 		numWorkers = nworkers();
 	end
-	SourcesSubInd = Array{Array{Int64,1}}(numWorkers);
+	#SourcesSubInd = Array{Array{Int64,1}}(numWorkers);
+	SourcesSubInd = Array{Array{Int64}}(undef,numWorkers);
 	ActualWorkers = workers();
 	if numWorkers < nworkers()
 		ActualWorkers = ActualWorkers[1:numWorkers];
 	end
-	pFor   = Array{RemoteChannel}(numWorkers)
+	#pFor   = Array{RemoteChannel}(numWorkers)
+	pFor   = Array{RemoteChannel}(undef,numWorkers);
 	i = 1; nextidx() = (idx=i; i+=1; idx)
-
+	idx=i;
 	ndips  = 1;
 	# send out jobs
 	@sync begin
 		for p = ActualWorkers
 			@async begin
 				while true
-					idx = nextidx()
+					idx = nextidx();
 					if idx > numWorkers
 						break
 					end
 					I_p = getIndicesOfKthWorker(numWorkers,idx,ndips);
 					# println("Sending ",collect(I_p)," to worker ", p);
 					# find src and rec on mesh
-					pFor[idx]  = initRemoteChannel(getDirectParamInternal,p, Mesh,ndips,I_p,samplingBinning,method);
-					wait(pFor[idx]);
+					#SEE IF CORRECT!!!!!!!!!!!!!!!!
+					tmp = initRemoteChannel(getDirectParamInternal,p, Mesh,ndips,I_p,samplingBinning,method);
+					pFor[1]  = initRemoteChannel(getDirectParamInternal,p, Mesh,ndips,I_p,samplingBinning,method);
+					wait(pFor[1]);
+					
 				end
 			end
 		end
