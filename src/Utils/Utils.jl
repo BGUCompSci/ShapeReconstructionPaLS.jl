@@ -17,7 +17,7 @@ RBF10Based        = "RBFs10";
 RBF5Based        = "RBFs5";
 
 
-export arrangeRemoteCallDataIntoLocalData,getIndicesOfKthWorker,divideDataToWorkersData
+export arrangeRemoteCallDataIntoLocalData,getIndicesOfKthWorker,divideDataToWorkersData, divideDirectDataToWorkersData
 
 
 function arrangeRemoteCallDataIntoLocalData(DremoteCall::Array{Future,1})
@@ -49,7 +49,7 @@ end
 
 function divideDirectDataToWorkersData(nworkers::Int64,Dlocal)
 nslices = size(Dlocal,3);
-dobs 	= Array{Array{Float32,3}}(nworkers);
+dobs 	= Array{Array{Float32,3}}(undef,nworkers);
 for i=1:nworkers
 	I_i = getDirectIndicesOfKthWorker(nworkers,i,nslices);
 	dobs[i] = Dlocal[:,:,I_i];
