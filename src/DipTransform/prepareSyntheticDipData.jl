@@ -1,3 +1,4 @@
+using Statistics
 export prepareSyntheticDipDataFiles
 function prepareSyntheticDipDataFiles(m::Array{Float64},Minv::RegularMesh,filename::String,pad::Int64,theta_phi_rad::Array{Float64,2},samplingBinning::Int64, noiseSample::Float64, noiseAngles::Float64,noiseTrans::Float64,method = MATFree)
 

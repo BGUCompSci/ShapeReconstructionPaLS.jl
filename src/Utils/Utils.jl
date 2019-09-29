@@ -39,7 +39,7 @@ end
 
 function divideDataToWorkersData(nworkers::Int64,Dlocal)
 ndips = size(Dlocal,2);
-dobs 	= Array{Array{Float32}}(nworkers);
+dobs 	= Array{Array{Float32}}(undef,nworkers);
 for i=1:nworkers
 	I_i = getIndicesOfKthWorker(nworkers,i,ndips);
 	dobs[i] = Dlocal[:,I_i];
