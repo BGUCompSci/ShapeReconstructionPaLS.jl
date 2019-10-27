@@ -32,12 +32,6 @@ for k = 1:traceLength
 end
 end
 
-#function ddx(n)
-# D = ddx(n), 1D derivative operator
-#	I,J,V = SparseArrays.spdiagm_internal(0 => fill(-1.0,n), 1 => fill(1.0,n)) 
-#	return sparse(I, J, V, n, n+1)
-#end
-
 
 export getData
 function getData(m::Array,pFor::PointCloudParam,doClear::Bool=false)
@@ -61,20 +55,12 @@ if pFor.method == MATFree
 	D2 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(ddx(Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
 	D3 = kron(ddx(Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
 	
-	# nx = A1*(D1'*m)./ (sqrt.((A1*D1'*m).^2 .+ eps));
-	# ny = A2*(D2'*m)./ (sqrt.((A2*D2'*m).^2 .+ eps));
-	# nz = A3*(D3'*m)./ (sqrt.((A3*D3'*m).^2 .+ eps));
 
-	# Wf = [nx ny nz];
-	
-	# ind = findall(x -> x > 0.5, norm(Wf));
 	ind = pFor.P;
 	I2 = collect(1:length(ind));
 	J2 = ind;
 	V2 = ones(size(ind));
-	# #println("length indices:",length(indices),"length u:",length(u))
 	P = sparse(I2,J2,V2,length(ind),length(m));
-	# nx = P*nx; ny = P*ny; nz = P*nz;
 
 	nx = pFor.Normals[:,1]; ny = pFor.Normals[:,2]; nz = pFor.Normals[:,3];
 	
@@ -98,8 +84,7 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	u,I1,J1,V1 = ParamLevelSetModelFunc(Mesh,m;computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
 	J1 = sparse(I1,J1,V1,prod(n),length(m));
 	d = u;
-	#println("u size:",size(u))
-	#Grad2 = getDivergenceMatrix2(Mesh);
+	
 	Div  = getDivergenceMatrix(Mesh)
 	println("Div size:", size(Div));
 	eps = 1e-4/Mesh.h[1];
@@ -108,19 +93,11 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
 	A3 = Af[:,2*Int(size(Af,2)/3)+1:Int(size(Af,2))];
 	
-	#D1 = Div[:,1:Int(size(Div,2)/3)]; println("D1 size:",size(D1))
-	#D2 = Div[:,Int(size(Div,2)/3)+1:2*Int(size(Div,2)/3)];
-	#D3 = Div[:,2*Int(size(Div,2)/3)+1:Int(size(Div,2))];
 	
 	D1 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),ddx(Mesh.n[1])))
 	D2 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(ddx(Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
 	D3 = kron(ddx(Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
 	
-	
-	# nx = A1*(D1'*u)./ (sqrt.((A1*D1'*u).^2 .+ eps));
-	# ny = A2*(D2'*u)./ (sqrt.((A2*D2'*u).^2 .+ eps));
-	# nz = A3*(D3'*u)./ (sqrt.((A3*D3'*u).^2 .+ eps));
-	# Wf = [nx ny nz];
 	
 	#P is a sparse matrix of size k \times n, where k = #point on point cloud , n = volume size of the mesh
 	indices = pFor.P;
@@ -130,41 +107,19 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	#println("length indices:",length(indices),"length u:",length(u))
 	P = sparse(I2,J2,V2,length(indices),length(u));
 	
-	#nx = P*nx; ny = P*ny; nz = P*nz;
 
-	
-	
 	nx = P*A1*(D1'*u);#./ (P*sqrt.((A1*D1'*u).^2 .+ eps));
 	ny = P*A2*(D2'*u);#./ (P*sqrt.((A2*D2'*u).^2 .+ eps));
 	nz = P*A3*(D3'*u);#./ (P*sqrt.((A3*D3'*u).^2 .+ eps));
-	#println("size of nx,ny,nz:", size(nx),size(ny), size(nz))
-	
-	
-	
-	#Wf = 	((P*Af*(Div'*u).^2))./((P*Af*(Div'*u).^2 .+eps));
-	
-	#println("size of Wf:",size(Wf))
-	#println("size of Wf:",size(Wf))
-	
 
-	 #d2R = 2*(spdiagm( 0 => vec(1 ./ ((P*Af*(Div'*u).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(Wf)))*P*Af*Div');
-	
-	#dRx = 2*(spdiagm( 0 => vec(1 ./ ((P*A1*(D1'*u).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(nx)))*P*A1*D1');
-	#dRy = 2*(spdiagm( 0 => vec(1 ./ ((P*A2*(D2'*u).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(ny)))*P*A2*D2');
-	#dRz = 2*(spdiagm( 0 => vec(1 ./ ((P*A3*(D3'*u).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(nz)))*P*A3*D3');
-	
-	#dRx = 2*((1.0I-spdiagm( 0 => vec(nx)))*P*A1*D1');
-	#dRy = 2*((1.0I-spdiagm( 0 => vec(ny)))*P*A2*D2');
-	#dRz = 2*((1.0I-spdiagm( 0 => vec(nz)))*P*A3*D3');
+	#d2R = 2*(spdiagm( 0 => vec(1 ./ ((P*Af*(Div'*u).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(Wf)))*P*Af*Div');
 	
 	dRx = P*A1*D1';
 	dRy = P*A2*D2';
 	dRz = P*A3*D3';
-	#println("size of drx,dry,drz:", size(dRx),size(dRy), size(dRz))
     d2R = [dRx; dRy; dRz];
 
 	 
-	#println("size d2r:",size(d2R));
 	Wf = [nx ny nz];
 	d = ((Wf))
 	pFor.Jacobian =  ((J1)'*d2R')';
