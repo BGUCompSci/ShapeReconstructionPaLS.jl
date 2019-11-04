@@ -4,6 +4,28 @@ using SparseArrays
 using jInv
 ### matrix free S (slicing) matrix
 
+
+function subv2ind(shape, cindices)
+    """Return linear indices given vector of cartesian indices.
+    shape: d-tuple of dimensions.
+    cindices: n-iterable of d-tuples, each containing cartesian indices.
+    Returns: n-vector of linear indices.
+
+    Based on:
+    https://discourse.julialang.org/t/psa-replacement-of-ind2sub-sub2ind-in-julia-0-7/14666/8
+    Similar to this matlab function:
+    https://github.com/tminka/lightspeed/blob/master/subv2ind.m
+    """
+    lndx = LinearIndices(Dims(shape))
+    n = length(cindices)
+    out = Array{Int}(undef, n)
+    for i = 1:n
+        out[i] = lndx[cindices[i]...]
+    end
+    return out
+end
+
+
 function binfunc(ii::Int32,binFactor::Int32)
 	ii -=1;
 	ii = div(ii,binFactor);
@@ -41,36 +63,43 @@ n = Mesh.n;
 ndips = 1;
 samplingBinning = pFor.samplingBinning;
 
-if pFor.method == MATFree
-	Div  = getDivergenceMatrix(Mesh)
-	println("Div size:", size(Div));
-	eps = 1e-4/Mesh.h[1];
-	Af   = getFaceAverageMatrix(Mesh)
-	A1 = Af[:,1:Int(size(Af,2)/3)]; println("A1 size:",size(A1))
-	A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
-	A3 = Af[:,2*Int(size(Af,2)/3)+1:Int(size(Af,2))];
-	
-	
-	D1 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),ddx(Mesh.n[1])))
-	D2 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(ddx(Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
-	D3 = kron(ddx(Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
-	
-
+if pFor.method == MATFree	
+	#Data:
+	#pFor.ind need to be sorted before
 	ind = pFor.P;
-	I2 = collect(1:length(ind));
-	J2 = ind;
-	V2 = ones(size(ind));
-	P = sparse(I2,J2,V2,length(ind),length(m));
-
 	nx = pFor.Normals[:,1]; ny = pFor.Normals[:,2]; nz = pFor.Normals[:,3];
+	margin = pFor.margin;
+	npc = pFor.npcAll;
+	subs = ind2subv(pFor.Mesh.n,ind);
 	
-	dRx = 2*(spdiagm( 0 => vec(1 ./ ((P*A1*(D1'*m).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(nx)))*P*A1*D1');
-	dRy = 2*(spdiagm( 0 => vec(1 ./ ((P*A2*(D2'*m).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(ny)))*P*A2*D2');
-	dRz = 2*(spdiagm( 0 => vec(1 ./ ((P*A3*(D3'*m).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(nz)))*P*A3*D3');
+	subsP1 = subs[1:round(Int,(0.5+margin)*length(subs))];
+	subsP2 = subs[round(Int,(0.5-margin)*length(subs)):length(subs)];
+	if(length(subsP2) != length(subsP1))
+		println("point clouds size mismatch");
+	end
+	d = zeros(Float32,length(subsP1)*3,npc);
+	for i=1:2
+		cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
+		println("cursubs size:",size(cursubs));
+		b = tuple(pFor.b[i,:]...);
+		for ii = 1:length(cursubs)
+			cursubs[ii] = round.(Int,cursubs[ii] .+ b);
+		end
+		
+		ind = subv2ind(pFor.Mesh.n,cursubs);
+		
+		I2 = collect(1:length(ind));
+		J2 = ind;
+		V2 = ones(size(ind));
+		P = sparse(I2,J2,V2,length(ind),length(m));
+		nxt = P*nx; nyt = P*ny; nzt = P*nz;
+		curnormals = [nxt nyt nzt];
+		d[:,i] = curnormals[:];
+	end
 	
-	pFor.Jacobian = [dRx; dRy; dRz];
+	println("simulated data size:",size(d))
 	
-	return pFor.Normals,pFor;
+	return d,pFor;
 	end
 	
 if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Based
@@ -79,89 +108,88 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	else
 		numParamOfRBF = 5;
 	end
-	
-	sigmaH = getDefaultHeavySide();
-	u,I1,J1,V1 = ParamLevelSetModelFunc(Mesh,m;computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
-	J1 = sparse(I1,J1,V1,prod(n),length(m));
-	d = u;
-	
-	Div  = getDivergenceMatrix(Mesh)
-	println("Div size:", size(Div));
-	eps = 1e-4/Mesh.h[1];
-	Af   = getFaceAverageMatrix(Mesh)
-	A1 = Af[:,1:Int(size(Af,2)/3)]; println("A1 size:",size(A1))
-	A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
-	A3 = Af[:,2*Int(size(Af,2)/3)+1:Int(size(Af,2))];
-	
-	
-	D1 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),ddx(Mesh.n[1])))
-	D2 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(ddx(Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
-	D3 = kron(ddx(Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
-	
-	
-	#P is a sparse matrix of size k \times n, where k = #point on point cloud , n = volume size of the mesh
-	indices = pFor.P;
-	I2 = collect(1:length(indices));
-	J2 = indices;
-	V2 = ones(size(indices));
-	#println("length indices:",length(indices),"length u:",length(u))
-	P = sparse(I2,J2,V2,length(indices),length(u));
-	
+	nRBF 				= div(length(m)- 5*pFor.npcAll,numParamOfRBF) ;
+	(m1,theta_phi,b) 	= splitRBFparamAndRotationsTranslations(m,nRBF,pFor.npcAll,numParamOfRBF);
+	theta_phi 			= theta_phi[pFor.workerSubIdxs,:];
+	b 					= b[pFor.workerSubIdxs,:];
+	mrot,Jrot 			= rotateAndMoveRBF(m1,Mesh,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
+	println("mrot size:",size(mrot));
+	d,JacT 				= getPCDataRBF(pFor, mrot,theta_phi,b,numParamOfRBF);
+	# multiply Jacobian with Jrot, and then take the transpose.
 
-	nx = P*A1*(D1'*u);#./ (P*sqrt.((A1*D1'*u).^2 .+ eps));
-	ny = P*A2*(D2'*u);#./ (P*sqrt.((A2*D2'*u).^2 .+ eps));
-	nz = P*A3*(D3'*u);#./ (P*sqrt.((A3*D3'*u).^2 .+ eps));
-
-	#d2R = 2*(spdiagm( 0 => vec(1 ./ ((P*Af*(Div'*u).^2 .+eps)))))*((1.0I-spdiagm( 0 => vec(Wf)))*P*Af*Div');
-	
-	dRx = P*A1*D1';
-	dRy = P*A2*D2';
-	dRz = P*A3*D3';
-    d2R = [dRx; dRy; dRz];
-
-	 
-	Wf = [nx ny nz];
-	d = ((Wf))
-	pFor.Jacobian =  ((J1)'*d2R')';
+	JacobianT = convert(SparseMatrixCSC{Float64,Int32},spzeros(length(m),prod(size(d))));
+	IpIdxs = getIpIdxs(pFor.workerSubIdxs,nRBF,pFor.npcAll,numParamOfRBF);
+	JacobianT[IpIdxs,:] = Jrot'*JacT;
+	pFor.Jacobian = JacobianT';
 end
 return d,pFor;
 end
 
-
-function getDirectDataRBF(pFor, m,numParamOfRBF = 5)
-samplingBinning = pFor.samplingBinning;
+function getPCDataRBF(pFor, m, theta_phi,b,numParamOfRBF = 5)
 Mesh = pFor.Mesh;
 n = pFor.Mesh.n;
 h = pFor.Mesh.h;
-traceLength = div(n[3],samplingBinning);
-ndips = 1;
-d = zeros(Float32,traceLength,ndips);
-lengthRBFparams = size(m,1);
-Ihuge = zeros(Int32,0);
-I1 = zeros(Int32,0);
-J1 = zeros(Int32,0);
-V1 = zeros(Float64,0);
-sigmaH = getDefaultHeavySide();
-u = zeros(prod(n));
-dsu = zeros(prod(n));
-Xc = convert(Array{Float32,2},getCellCenteredGrid(Mesh));
-binningFactor = convert(Int32,n[1]*n[2]*samplingBinning);
-Jacobians = Array{SparseMatrixCSC{Float64,Int32}}(ndips);
-
-iifunc = (ii)->binfunc(ii,binningFactor)
-nz = 1;
+ndips = 2;
 volCell = prod(Mesh.h);
-for ii = 1:ndips
-	u = vec(u);
-	u,I1,J1,V1,Ihuge = ParamLevelSetModelFunc(Mesh,m;computeJacobian = 1,sigma = sigmaH,
-				Xc = Xc,u = u,dsu = dsu,Ihuge = Ihuge,Is = I1, Js = J1,Vs = V1,iifunc = iifunc,numParamOfRBF=numParamOfRBF);
-	u = reshape(u,tuple(n...));
-	d[:,ii] = sampleSlices(u,volCell,samplingBinning);
-	Jacobians[ii] = sparse(J1,I1,V1,lengthRBFparams,traceLength);
-	(Jacobians[ii].nzval).*=volCell;
+
+eps = 1e-4/Mesh.h[1];
+Af   = getFaceAverageMatrix(Mesh)
+A1 = Af[:,1:Int(size(Af,2)/3)]; println("A1 size:",size(A1))
+A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
+A3 = Af[:,2*Int(size(Af,2)/3)+1:Int(size(Af,2))];
+
+
+D1 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),ddx(Mesh.n[1])))
+D2 = kron(sparse(1.0I, Mesh.n[3], Mesh.n[3]),kron(ddx(Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
+D3 = kron(ddx(Mesh.n[3]),kron(sparse(1.0I, Mesh.n[2], Mesh.n[2]),sparse(1.0I, Mesh.n[1], Mesh.n[1])))
+
+
+#P is a sparse matrix of size k \times n, where k = #points on point cloud , n = volume size of the mesh
+Jacobians = Array{SparseMatrixCSC{Float64,Int32}}(undef, 2);
+indices = pFor.P;
+I2 = collect(1:length(indices));
+J2 = indices;
+V2 = ones(size(indices));
+P = sparse(I2,J2,V2,length(indices),prod(Mesh.n));
+
+
+full_ind = pFor.P;
+margin = pFor.margin;
+npc = pFor.npcAll;
+subs = ind2subv(pFor.Mesh.n,full_ind);
+subsP1 = subs[1:round(Int,(0.5+margin)*length(subs))];
+subsP2 = subs[round(Int,(0.5-margin)*length(subs)):length(subs)];
+
+if(length(subsP2) != length(subsP1))
+	println("point clouds size mismatch");
+end
+d = zeros(Float32,length(subsP1)*3,npc);
+for i=1:2
+	sigmaH = getDefaultHeavySide();
+	u,I1,J1,V1 = ParamLevelSetModelFunc(Mesh,m[:,i];computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
+	J1 = sparse(I1,J1,V1,prod(n),length(m[:,i]));
+	
+	nx = A1*(D1'*u);
+	ny = A2*(D2'*u);
+	nz = A3*(D3'*u);
+	
+	cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
+	b = tuple(pFor.b[i,:]...);
+	ind = subv2ind(pFor.Mesh.n,cursubs);
+	I2 = collect(1:length(ind));
+	J2 = ind;
+	V2 = ones(size(ind));
+	P = sparse(I2,J2,V2,length(ind),length(u));
+	nxt = P*nx; nyt = P*ny; nzt = P*nz;
+	curnormals = [nxt nyt nzt];
+	d[:,i] = curnormals[:];
+	
+	dRx = P*A1*D1';
+	dRy = P*A2*D2';
+	dRz = P*A3*D3';
+	Jacobians[i] = J1'*[dRx; dRy; dRz]';
+	
 end
 JacT = blockdiag(Jacobians...);
-# JacT = 0.0;
-
 return d,JacT
 end

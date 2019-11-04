@@ -93,20 +93,25 @@ println("nworkers=",nWorkers)
 misfun = PCFun; ## least squares
 
 	dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
-	prepareSyntheticPointCloudData(m,Mesh,1,dipDataFilename);
+	b = [0.0 0 0 ; 0.0 0 0 ]
+	theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
+	noiseTrans = 0.0*prod(Mesh.h);
+	noiseAngles = deg2rad(1.0);
+	prepareSyntheticPointCloudData(m,Mesh,2,theta_phi_dip,b,noiseTrans,noiseAngles,dipDataFilename);
 
 	#########################################################################################################
 	### Read the dipping data ###############################################################################
 	#########################################################################################################
-	n,domain,Data,P,Normals = readPointCloudDataFile(dipDataFilename);
+	n,domain,Data,P,Normals,Margin,b,theta_phi_dip = readPointCloudDataFile(dipDataFilename);
+	println("initial obtained translation:",b);
     
-
+	writedlm(string("simPC",".txt"),convert(Array{Int64},P));
 	### Set up the dip inversion
-	pForDip = getPointCloudParam(Mesh,P,Normals,samplingBinning,nWorkers,method);
+	pForDip = getPointCloudParam(Mesh,P,Normals,Margin,theta_phi_dip,b,samplingBinning,nWorkers,method);
 
 	### Create Dip param if we use the GRAD of MATFREE to locate new RBFs
-	dobsDirect = divideDirectDataToWorkersData(nWorkers,Normals);
-	println(size(dobsDirect))
+	dobsDirect = divideDataToWorkersData(nWorkers,Data);
+	println("size of dobs",size(dobsDirect))
 	#nnz = filter(x -> x != 0,dobsDirect[1]);
 	#println("length of dobsdirect: ",length(dobsDirect[1]),"_",length(nnz));
 	Wd_Dip = Array{Array{Float32}}(undef,nWorkers);
@@ -117,7 +122,7 @@ misfun = PCFun; ## least squares
 
 
 
-n_Moves_all = 1;
+n_Moves_all = 2;
 
 
 isSimple = 0;
@@ -129,7 +134,7 @@ isRBF10 = 0;
 ###############################################################################################
 
 
-	nRBF = 100;
+	nRBF = 200;
 	
 	isRBF10 = (method == RBF10BasedSimple1 || method==RBF10BasedSimple2 || method==RBF10Based);
 	isSimple = (method==RBFBasedSimple1 || method==RBF10BasedSimple1 || method==RBFBasedSimple2 || method==RBF10BasedSimple2);
@@ -157,10 +162,10 @@ isRBF10 = 0;
 	sback = zero(Float32);
 	a = -100000000.0;
 	b = 10000000.0;
-	boundsHigh = zeros(Float32,n_m_simple) .+ b;
-	boundsLow = zeros(Float32,n_m_simple) .+ a;
+	boundsHigh = zeros(Float32,nAll) .+ b;
+	boundsLow = zeros(Float32,nAll) .+ a;
 	# m0 - initial guess. mref - reference for regularization.
-	mref = zeros(Float32,n_m_simple);
+	mref = zeros(Float32,nAll);
 	m0   = zeros(Float64,n_m_simple);
 	mCenters = zeros(Float32,n_tup);
 	mref[1:numParamOfRBF:n_m_simple] = ParamLevelSet.centerHeavySide*2.0*rand(nRBF);
@@ -179,8 +184,11 @@ isRBF10 = 0;
 	mref[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .= (Mesh.domain[1] + Mesh.domain[2])/2;
 	mref[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .= (Mesh.domain[3] + Mesh.domain[4])/2;
 	mref[numParamOfRBF:numParamOfRBF:n_m_simple] .= (Mesh.domain[5] + Mesh.domain[6])/2;
-	m0[:] .= mref[1:n_m_simple];
+	m0[:] = mref[1:n_m_simple];
 	
+	if !isSimple
+		m0 = wrapRBFparamAndRotationsTranslations(m0,theta_phi_dip,zeros(size(theta_phi_dip,1),3));
+	end
 	
 	mref[:] = m0;
 	m0[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .+= 0.2*(Mesh.domain[2] - Mesh.domain[1])*randn(nRBF);
@@ -191,7 +199,7 @@ isRBF10 = 0;
 
 	alpha = 5e-2;
 
-	II = (sparse(1.0I, n_m_simple,n_m_simple));
+	II = (sparse(1.0I, nAll,nAll));
 	regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);
 	HesPrec = getEmptyRegularizationPreconditioner();
 
@@ -262,7 +270,7 @@ times=0;
 
 
 if !(method == MATBased || method == MATFree)
-	outerIter = 10;
+	outerIter = 20;
 	grad_u = nothing;
 	new_RBF_location = [];
 	@sync for iterNum=2:outerIter

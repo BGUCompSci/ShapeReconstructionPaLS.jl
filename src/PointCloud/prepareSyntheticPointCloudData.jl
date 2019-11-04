@@ -5,15 +5,58 @@ using SparseArrays
 using jInv
 export prepareSyntheticPointCloudData
 
+function subv2ind(shape, cindices)
+    """Return linear indices given vector of cartesian indices.
+    shape: d-tuple of dimensions.
+    cindices: n-iterable of d-tuples, each containing cartesian indices.
+    Returns: n-vector of linear indices.
+
+    Based on:
+    https://discourse.julialang.org/t/psa-replacement-of-ind2sub-sub2ind-in-julia-0-7/14666/8
+    Similar to this matlab function:
+    https://github.com/tminka/lightspeed/blob/master/subv2ind.m
+    """
+    lndx = LinearIndices(Dims(shape))
+    n = length(cindices)
+    out = Array{Int}(undef, n)
+    for i = 1:n
+        out[i] = lndx[cindices[i]...]
+    end
+    return out
+end
+
+
+function ind2subv(shape, indices)
+    """Map linear indices to cartesian.
+    shape: d-tuple with size of each dimension.
+    indices: n-iterable with linear indices.
+    Returns: n-vector of d-tuples with cartesian indices.
+
+    Based on:
+    https://discourse.julialang.org/t/psa-replacement-of-ind2sub-sub2ind-in-julia-0-7/14666/8
+    Similar to this matlab function:
+    https://github.com/probml/pmtk3/blob/master/matlabTools/util/ind2subv.m
+    """
+    n = length(indices)
+    d = length(shape)
+    cndx = CartesianIndices(Dims(shape))
+    out = Array{Tuple}(undef, n)
+    for i=1:n
+        lndx = indices[i]
+        out[i] = cndx[lndx]
+    end
+    return out
+end
+
+
 function ddx(n)
 # D = ddx(n), 1D derivative operator
 	I,J,V = SparseArrays.spdiagm_internal(0 => fill(-1.0,n), 1 => fill(1.0,n)) 
 	return sparse(I, J, V, n, n+1)
 end
 
-function prepareSyntheticPointCloudData(m,Minv::RegularMesh,ndipsAll::Int64,filename::String)
+function prepareSyntheticPointCloudData(m,Minv::RegularMesh,ndipsAll::Int64,theta_phi_dip::Array{Float64,2} ,b::Array{Float64,2}, noiseTrans :: Float64, noiseAngle :: Float64 ,filename::String)
 n = Minv.n;
-#m = reshape(m,tuple(n...));
 m = m[:]
 eps = 1e-4/Minv.h[1];
 Af   = getFaceAverageMatrix(Minv)
@@ -40,25 +83,26 @@ nz = A3*(D3'*m);#./ (sqrt.((A3*D3'*m).^2 .+ eps));
 
 Wf = [nx ny nz];
 f2(A) = [norm(A[i,:]) for i=1:size(A,1)]
-
-#Wf = Wf./(f2(Wf) .+ eps);
-
 nx = Wf[:,1]; ny = Wf[:,2]; nz = Wf[:,3];
 
 println("maximum norm:",maximum(f2(Wf)));
-ind = findall(x -> x > 0.4, f2(Wf));
+ind = findall(x -> x > 0.8, f2(Wf));
 println("indices size :",size(ind))
-I2 = collect(1:length(ind));
-J2 = ind;
-V2 = ones(size(ind));
-#println("length indices:",length(indices),"length u:",length(u))
-P = sparse(I2,J2,V2,length(ind),length(m));
-nx = P*nx; ny = P*ny; nz = P*nz;
-Normals = [nx ny nz];
 
-pFor = getPointCloudParam(Minv,ind,Normals,1,1,MATFree)
+subs = ind2subv(Minv.n,ind);
+subs = sort(subs);
+ind = subv2ind(Minv.n,subs);
+Normals = [nx ny nz];
+margin = 0.2;
+
+
+pFor = getPointCloudParam(Minv,ind,Normals,margin,theta_phi_dip ,b,1,1,MATFree)
+println("pFor:",pFor);
 Dremote,pFor = getData(m[:],pFor);
-Data = arrangeRemoteCallDataIntoLocalData(Dremote);
+Data = arrangeRemoteCallPCIntoLocalData(Dremote);
+#Add noise:
+b = b + noiseTrans*randn(size(b,1),3)
+theta_phi_dip = theta_phi_dip +  noiseAngle*randn(size(theta_phi_dip));
 					
 file = matopen(string(filename,"_data.mat"), "w");
 write(file,"domain",Minv.domain);
@@ -66,6 +110,9 @@ write(file,"n",Minv.n);
 write(file,"Data",Data);
 write(file,"P",ind);
 write(file,"Normals",Normals);
+write(file,"margin",margin);
+write(file,"b",b);
+write(file,"theta_phi_dip",theta_phi_dip)
 # write(file,"m_true",m);
 #write(file,"pad",pad);
 close(file);
@@ -81,6 +128,9 @@ n = read(file,"n");
 Data = read(file,"Data");
 P = read(file,"P");
 Normals = read(file,"Normals");
+Margin = read(file,"margin");
+b = read(file,"b");
+theta_phi_dip = read(file,"theta_phi_dip");
 close(file);
-return n,domain,Data,P,Normals;
+return n,domain,Data,P,Normals,Margin,b,theta_phi_dip;
 end
