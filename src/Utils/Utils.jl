@@ -16,7 +16,7 @@ RBF10BasedSimple2 = "RBFs10Simple2";
 RBFBased        = "RBFs";
 RBF10Based        = "RBFs10";
 RBF5Based        = "RBFs5";
-
+export arrangeRemoteCallPCIntoLocalData
 export getDivergenceMatrix2
 export arrangeRemoteCallDataIntoLocalData,getIndicesOfKthWorker,divideDataToWorkersData, divideDirectDataToWorkersData
 export dividePointCloudDataToWorkersData
@@ -25,6 +25,26 @@ function arrangeRemoteCallDataIntoLocalData(DremoteCall::Array{Future,1})
 N = length(DremoteCall);
 DdivideLocal = Array{Array{Float64,2}}(undef,N);
 for k=1:N
+	DdivideLocal[k] = fetch(DremoteCall[k]);
+end
+l = 0;
+for k=1:N
+	l+=size(DdivideLocal[k],2);
+end
+Dlocal = zeros(eltype(DdivideLocal[1]),size(DdivideLocal[1],1),l)
+for k=1:N
+	Dlocal[:,k:N:end] = DdivideLocal[k];
+end	
+return Dlocal;
+end
+
+function arrangeRemoteCallPCIntoLocalData(DremoteCall::Array{Future,1})
+N = length(DremoteCall);
+println("length of dremote:",N);
+println("size of dremote[1]:",size(DremoteCall)[1])
+DdivideLocal = Array{Array{Float64,2}}(undef,N);
+for k=1:N
+println("size of fetch",size(fetch(DremoteCall[k])));
 	DdivideLocal[k] = fetch(DremoteCall[k]);
 end
 l = 0;
