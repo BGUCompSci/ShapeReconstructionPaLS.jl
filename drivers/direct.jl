@@ -107,17 +107,6 @@ misfun = SSDFun; ## least squares
 
 
 
-# if invertVis
-# ### Set up the vis inversion
-	# pForVis = getVisHullParam(Mesh,theta_phi_vis,zeros(nShots,3),ScreenMesh,XlocScreen,LocCamera,method,nWorkers);
-	# dobsVis = divideDataToWorkersData(nWorkers,DataVis);
-	# Wd_Vis = Array{Array{Float32}}(nWorkers);
-	# for k=1:length(Wd_Vis)
-		# Wd_Vis[k] = sqrt(0.1*(Mesh.domain[2]-Mesh.domain[1])*prod(Mesh.h[2:3]))*ones(Float32,size(dobsVis[k]));
-	# end
-# end
-
-
 n_Moves_all = 1;
 
 
@@ -190,7 +179,6 @@ isRBF10 = 0;
 
 	alpha = 5e-1;
 
-	#II = speye(Float32,n_m_simple);
 	II = (sparse(1.0I, n_m_simple,n_m_simple));
 	println("size of II:",size(II));
 	println("size of m:",size(m))
@@ -205,7 +193,7 @@ isRBF10 = 0;
 	end
 
 pMisRFs = getMisfitParam(pForDip, Wd_Dip, dobsDirect, misfun, Iact,sback);
-# if(locateRBFwithGrads)
+
 
 
 
@@ -248,9 +236,8 @@ pInv = getInverseParam(Mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
 
 #### Projected Gauss Newton
 mc = m0;
-
-  pInv.maxIter = 300;
-	mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
+pInv.maxIter = 300;
+mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
 
 pInv.maxIter = 200;
 myDump(mc,0,1,pInv,0,"",0,noiseAnglesDeg,noiseTrans,invertVis);
@@ -343,13 +330,14 @@ if !(method == MATBased || method == MATFree)
 
 		global mc = mc_new;
 
-
+		global nRBF += new_nRBF;
 		#II = speye(Float32,length(mc_new));
 		len = Int64(length(mc_new));
 		println(typeof(len))
 		IIs = sparse(1.0I,len,len);
 		pInv.regularizer = (m, mref, M)->TikhonovReg(m,mref,M,IIs);
 		pInv.alpha .*= 0.8;
+		
 		if isRBF10
 			spd_reg = (m,mref,M) -> RBF_SPD_regularization(m,mref,nRBF);
 			pInv.regularizer  = [pInv.regularizer;spd_reg];
@@ -367,11 +355,9 @@ if !(method == MATBased || method == MATFree)
 			mc, = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
 			myDump(mc,0,iterNum+1,pInv,0,methodName,0,noiseAnglesDeg,noiseTrans,invertVis);
 		end
-		global nRBF += new_nRBF;
+		
     
 	end
-	
-	## here I produce the shape on a twice finer mesh for Andrei to produce nice pictures.
 	
 		meshForPlotting = getRegularMesh(Mesh.domain,Mesh.n*8);
 		ntup = tuple((meshForPlotting.n)...);

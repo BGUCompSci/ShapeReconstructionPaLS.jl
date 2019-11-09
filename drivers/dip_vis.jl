@@ -589,7 +589,7 @@ if !(method == MATBased || method == MATFree)
 		mref_new[1:n_mc_new] = mc_new[1:n_mc_new];
 
 		global mc = mc_new;
-
+		global nRBF += new_nRBF;
 
 		II = (sparse(1.0I, length(mc_new),length(mc_new)));
 		pInv.regularizer = (m, mref, M)->TikhonovReg(m,mref,M,II);
@@ -611,7 +611,7 @@ if !(method == MATBased || method == MATFree)
 			mc, = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
 			myDump(mc,0,iterNum+1,pInv,0,methodName,nDips,noiseAnglesDeg,noiseTrans,invertVis,nShots);
 		end
-		global nRBF += new_nRBF;
+		
     
 	end
 

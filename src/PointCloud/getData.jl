@@ -1,6 +1,8 @@
 import LinearAlgebra
 using LinearAlgebra
 using SparseArrays
+using DelimitedFiles
+
 using jInv
 ### matrix free S (slicing) matrix
 
@@ -25,36 +27,6 @@ function subv2ind(shape, cindices)
     return out
 end
 
-
-function binfunc(ii::Int32,binFactor::Int32)
-	ii -=1;
-	ii = div(ii,binFactor);
-	ii +=1;
-	return ii;
-end
-
-export sampleSlices,sampleSlicesT
-function sampleSlices(u::Array{Float64,3},cellVolume::Float64,samplingBinning::Int64=1)
-n_tup = size(u);
-n = collect(n_tup);
-traceLength = div(n[3],samplingBinning);
-s = zeros(eltype(u),traceLength);
-for k = 1:traceLength
-	@inbounds s[k] = sum(view(u,:,:,(samplingBinning*(k-1)+1):(samplingBinning*k)));
-end
-s.*=cellVolume;
-return s;
-end
-
-function sampleSlicesT(s::Array,cellVolume::Float64,u::Array{Float64,3})
-traceLength = length(s);
-samplingBinning = div(size(u,3),traceLength);
-for k = 1:traceLength
-	@inbounds u[:,:,(samplingBinning*(k-1)+1):(samplingBinning*k)] = cellVolume*s[k];
-end
-end
-
-
 export getData
 function getData(m::Array,pFor::PointCloudParam,doClear::Bool=false)
 d = 0;
@@ -65,12 +37,13 @@ samplingBinning = pFor.samplingBinning;
 
 if pFor.method == MATFree	
 	#Data:
-	#pFor.ind need to be sorted before
 	ind = pFor.P;
 	nx = pFor.Normals[:,1]; ny = pFor.Normals[:,2]; nz = pFor.Normals[:,3];
 	margin = pFor.margin;
 	npc = pFor.npcAll;
 	subs = ind2subv(pFor.Mesh.n,ind);
+	Jacobians = Array{SparseMatrixCSC{Float64,Int32}}(undef, 2);
+
 	
 	subsP1 = subs[1:round(Int,(0.5+margin)*length(subs))];
 	subsP2 = subs[round(Int,(0.5-margin)*length(subs)):length(subs)];
@@ -78,7 +51,7 @@ if pFor.method == MATFree
 		println("point clouds size mismatch");
 	end
 	d = zeros(Float32,length(subsP1)*3,npc);
-	for i=1:2
+	for i=1:npc
 		cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
 		println("cursubs size:",size(cursubs));
 		b = tuple(pFor.b[i,:]...);
@@ -92,13 +65,31 @@ if pFor.method == MATFree
 		J2 = ind;
 		V2 = ones(size(ind));
 		P = sparse(I2,J2,V2,length(ind),length(m));
+		
+		
 		nxt = P*nx; nyt = P*ny; nzt = P*nz;
 		curnormals = [nxt nyt nzt];
 		d[:,i] = curnormals[:];
+		
 	end
 	
-	println("simulated data size:",size(d))
+	println("simulated data size:",size(d));
+	ind = pFor.P;
+	println("ind size:",size(ind))
+	I2 = ind;
+	J2 = ind;
+	V2 = ones(size(ind));
+	Pp = sparse(I2,J2,V2,length(m),length(m));
 	
+	
+	Mesh = pFor.Mesh;
+	n = pFor.Mesh.n;
+	h = pFor.Mesh.h;
+	ndips = 2;
+	volCell = prod(Mesh.h);
+	pFor.Jacobian = (Pp*Af*Div')';
+	
+	println("size of jac",size(pFor.Jacobian));
 	return d,pFor;
 	end
 	
@@ -164,15 +155,30 @@ if(length(subsP2) != length(subsP1))
 	println("point clouds size mismatch");
 end
 d = zeros(Float32,length(subsP1)*3,npc);
-for i=1:2
+for i=1:npc
 	sigmaH = getDefaultHeavySide();
+	
 	u,I1,J1,V1 = ParamLevelSetModelFunc(Mesh,m[:,i];computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
 	J1 = sparse(I1,J1,V1,prod(n),length(m[:,i]));
+	
+	
 	
 	nx = A1*(D1'*u);
 	ny = A2*(D2'*u);
 	nz = A3*(D3'*u);
 	
+	
+	#########################Normalized version:
+	#eps = 1e-15;
+	#Af = getFaceAverageMatrix(Mesh);
+	#Div = getDivergenceMatrix(Mesh);
+	#writedlm(string("checknormals",".txt"),convert(Array{Float64},A1*(D1'*u)./sqrt.((A1*D1'*u).^2)));
+	#nx = A1*(D1'*u) ./ sqrt.((A1*(D1'*u)).^2 .+ (A2*(D2'*u)).^2 .+ (A3*(D3'*u)).^2 .+ eps);  
+	#ny = A2*(D2'*u) ./ sqrt.((A1*(D1'*u)).^2 .+ (A2*(D2'*u)).^2 .+ (A3*(D3'*u)).^2 .+ eps);  
+	#nz = A3*(D3'*u)./ sqrt.((A1*(D1'*u)).^2 .+ (A2*(D2'*u)).^2 .+ (A3*(D3'*u)).^2 .+ eps);  
+	#norms = [nx ny nz];
+	#writedlm(string("curnormals",".txt"),convert(Array{Float64},norms));
+
 	cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
 	b = tuple(pFor.b[i,:]...);
 	ind = subv2ind(pFor.Mesh.n,cursubs);
@@ -187,6 +193,7 @@ for i=1:2
 	dRx = P*A1*D1';
 	dRy = P*A2*D2';
 	dRz = P*A3*D3';
+	
 	Jacobians[i] = J1'*[dRx; dRy; dRz]';
 	
 end
