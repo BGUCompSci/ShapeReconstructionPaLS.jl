@@ -27,13 +27,94 @@ function subv2ind(shape, cindices)
     return out
 end
 
+
+function normalize(xyz::Array{Float64},eps::Float64 = 1e-5)
+	n = div(length(xyz),3);
+	x = xyz[1:n];
+	y = xyz[(n+1):2*n];
+	z = xyz[(2*n+1):3*n];
+	norms = sqrt.(x.^2 .+ y.^2 .+ z.^2 .+ eps);
+	inv_n = 1.0./norms;
+	inv_np3 = inv_n.^3;
+	nx = x./norms;
+	ny = y./norms;
+	nz = z./norms;
+	xyz_norm = [nx;ny;nz];
+	#d(x/sqrt(x^2+y^2+z^2))_dx = 1/sqrt(x^2+y^2+z^2) - x^2/(x^2+y^2+z^2)^{3/2}
+	#d(x/sqrt(x^2+y^2+z^2))_dy =  - x*y/(x^2+y^2+z^2)^{3/2}
+	dxdx = sparse(Diagonal(inv_n .- (x.^2).*inv_np3));
+	dxdy = sparse(Diagonal(      .- (x.*y).*inv_np3));
+	dxdz = sparse(Diagonal(      .- (x.*z).*inv_np3));
+	dydx = dxdy;
+	dydy = sparse(Diagonal(inv_n .- (y.^2).*inv_np3));
+	dydz = sparse(Diagonal( 	 .- (y.*z).*inv_np3));
+	dzdx = dxdz;
+	dzdy = dydz;
+	dzdz = sparse(Diagonal(inv_n .- (z.^2).*inv_np3));
+	J = [dxdx dxdy dxdz ; dydx dydy dzdy ; dzdx dzdy dzdz];
+	return xyz_norm, J
+end
+
+
+
+
+
 export getData
 function getData(m::Array,pFor::PointCloudParam,doClear::Bool=false)
 d = 0;
 Mesh = pFor.Mesh;
 n = Mesh.n;
-ndips = 1;
+npc = pFor.npcAll;
 samplingBinning = pFor.samplingBinning;
+ind_array = pFor.P;
+n_points = 0;
+for k=1:length(ind_array)
+	n_points+=length(ind_array[k]);
+end
+d = zeros(Float32,3*n_points);
+Jacobian = convert(SparseMatrixCSC{Float64,Int32},length(d),spzeros(length(m)));
+
+if pFor.method == MATFree	
+	Af   = getFaceAverageMatrix(Minv)
+	A1 = Af[:,1:Int(size(Af,2)/3)]; #println("A1 size:",size(A1))
+	A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
+	A3 = Af[:,2*Int(size(Af,2)/3)+1:Int(size(Af,2))];
+	Af = blockdiag(A1,A2,A3);
+	
+	D1 = kron(sparse(1.0I, Minv.n[3], Minv.n[3]),kron(sparse(1.0I, Minv.n[2], Minv.n[2]),ddx(Minv.n[1])))
+	D2 = kron(sparse(1.0I, Minv.n[3], Minv.n[3]),kron(ddx(Minv.n[2]),sparse(1.0I, Minv.n[1], Minv.n[1])))
+	D3 = kron(ddx(Minv.n[3]),kron(sparse(1.0I, Minv.n[2], Minv.n[2]),sparse(1.0I, Minv.n[1], Minv.n[1])))
+	D = [D1;D2;D3];
+	global count = 1;
+	for i=1:npc
+		ind = ind_array[i];
+		nx = A1*(D1'*m);
+		ny = A2*(D2'*m);
+		nz = A3*(D3'*m);
+		nx = nx[ind];
+		ny = ny[ind];
+		nz = nz[ind];
+		#normals = Af*D*m;
+		normals,J = normalize([nx;ny;nz]);
+		d[count:(count + 3*length(ind))] = normals;
+		I2 = collect(1:length(ind));
+		J2 = ind;
+		V2 = ones(size(ind));
+		P = sparse(I2,J2,V2,length(ind),length(m));
+		P = blockdiag(P,P,P);
+		J = J*P*Af*D';
+		Jacobian[count:(count + 3*length(ind)),:] = J;
+		count = count + 3*length(ind) + 1;
+	end
+
+
+
+
+
+
+
+
+
 
 if pFor.method == MATFree	
 	#Data:
