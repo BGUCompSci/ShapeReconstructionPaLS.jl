@@ -95,7 +95,7 @@ misfun = PCFun; ## least squares
 	b = [0.0 0 0 ; 0.0 0 0 ]
 	theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
 	noiseTrans = 0.0*prod(Mesh.h);
-	noiseAngles = deg2rad(1.0);
+	noiseAngles = deg2rad(0.0);
 	prepareSyntheticPointCloudData(m,Mesh,2,theta_phi_dip,b,noiseTrans,noiseAngles,dipDataFilename);
 
 	#########################################################################################################
@@ -138,7 +138,7 @@ isRBF10 = 0;
 ###############################################################################################
 
 
-	nRBF = 10;
+	nRBF = 1;
 	
 	isRBF10 = (method == RBF10BasedSimple1 || method==RBF10BasedSimple2 || method==RBF10Based);
 	isSimple = (method==RBFBasedSimple1 || method==RBF10BasedSimple1 || method==RBFBasedSimple2 || method==RBF10BasedSimple2);
@@ -271,13 +271,12 @@ pInv = getInverseParam(Mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
 
 #### Projected Gauss Newton
 mc = m0;
-pInv.maxIter = 1000;
+pInv.maxIter = 2;
 Dc = nothing;
 mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
 
-print("DC shape:",size(Dc))
 
-pInv.maxIter = 200;
+pInv.maxIter = 5;
 myDump(mc,0,1,pInv,0,"",0,noiseAnglesDeg,noiseTrans,invertVis);
 
 
@@ -309,13 +308,10 @@ if !(method == MATBased || method == MATFree)
 			pMis_Free = getMisfitParam(pForDip_MATFree, Wd_Dip, dobsDirect, misfun, Iact_free,sback);
 			computeMisfit(u,pMis_Free);
 			gradMis = computeGradMisfit(u,Dc,pMis_Free)
-			
+			#JtV, v = (dpred - dobs)
 			gradMis = gradMis.^2;
 			amax = argmax(gradMis); vmax = maximum(gradMis);
 			sp = sortperm(gradMis,rev = true);
-			sv = sort(gradMis, rev= true);
-			println("size of sp:",size(sp));
-			println("amax:",amax); println("vmax:",vmax)
 			Ii = sp[1:new_nRBF];
 		end
 		
@@ -327,12 +323,10 @@ if !(method == MATBased || method == MATFree)
     while(Ii[1] in new_RBF_location )#|| Ii.-1 in new_RBF_location || Ii.+1 in new_RBF_location)
       #Ii = findall(x -> x .>0.3 && x.<0.7,u);
 	  #Ii = P[randperm(length(P))[1:new_nRBF]];
-          tmp = sp[1:100*new_nRBF];
-	  println("size of sp if conflict:",size(tmp));
-	  Ii = tmp[randperm(100*new_nRBF)[1:new_nRBF]];
+        tmp = sp[1:outerIter*new_nRBF];
+		Ii = tmp[randperm(outerIter*new_nRBF)[1:new_nRBF]];
       #Ii = Ii[randperm(length(Ii))[1:new_nRBF]];
     end
-    	println("length of I",size(Ii));
 		global new_RBF_location = append!(new_RBF_location,Ii);
 		#(I1,I2,I3) = ind2sub(n_tup,I);
 		#Ii = P[randperm(length(P))[1:new_nRBF]];
@@ -392,7 +386,6 @@ if !(method == MATBased || method == MATFree)
 		
 		#II = speye(Float32,length(mc_new));
 		len = Int64(length(mc_new));
-		println(typeof(len))
 		IIs = sparse(1.0I,len,len);
 		pInv.regularizer = (m, mref, M)->TikhonovReg(m,mref,M,IIs);
 		global nRBF += new_nRBF;

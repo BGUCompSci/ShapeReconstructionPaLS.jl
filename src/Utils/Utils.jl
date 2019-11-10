@@ -115,8 +115,8 @@ end
 
 """
 function PCFun(dc::Union{Array{Float64},Array{Float32}},dobs::Union{Array{Float64},Array{Float32}},Wd::Union{Array{Float64},Array{Float32}})
-	println("dobs size:",size(dobs));
-	println("dc size:",size(dc))
+	#println("dobs size:",size(dobs));
+	#println("dc size:",size(dc))
 	res   = vec(dc)-vec(dobs) # predicted - observed data
 	#res   = vec(dc) # predicted - observed data
 	Wd    = vec(Wd)

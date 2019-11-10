@@ -58,7 +58,7 @@ Jacobian = convert(SparseMatrixCSC{Float64,Int32},spzeros(length(d),length(m)));
 
 if pFor.method == MATFree	
 	Af   = getFaceAverageMatrix(Minv)
-	A1 = Af[:,1:Int(size(Af,2)/3)]; #println("A1 size:",size(A1))
+	A1 = Af[:,1:Int(size(Af,2)/3)];
 	A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
 	A3 = Af[:,2*Int(size(Af,2)/3)+1:Int(size(Af,2))];
 	Af = blockdiag(A1,A2,A3);
@@ -89,7 +89,6 @@ if pFor.method == MATFree
 		count = count + 3*length(ind);
 	end 
 	pFor.Jacobian = Jacobian;
-	println("before return getData matfree");
 	return d,pFor;
 end
 	
@@ -104,7 +103,6 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	theta_phi 			= theta_phi[pFor.workerSubIdxs,:];
 	b 					= b[pFor.workerSubIdxs,:];
 	mrot,Jrot 			= rotateAndMoveRBF(m1,Minv,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
-	println("mrot size:",size(mrot));
 	d,JacT 				= getPCDataRBF(pFor, mrot,theta_phi,b,numParamOfRBF);
 	# multiply Jacobian with Jrot, and then take the transpose.
 
@@ -138,24 +136,6 @@ D = [D1 D2 D3];
 
 #P is a sparse matrix of size k \times n, where k = #points on point cloud , n = volume size of the mesh
 Jacobians = Array{SparseMatrixCSC{Float64,Int32}}(undef, npc);
-# indices = pFor.P;
-# I2 = collect(1:length(indices));
-# J2 = indices;
-# V2 = ones(size(indices));
-# P = sparse(I2,J2,V2,length(indices),prod(Mesh.n));
-
-
-# full_ind = pFor.P;
-# margin = pFor.margin;
-# npc = pFor.npcAll;
-# subs = ind2subv(pFor.Mesh.n,full_ind);
-# subsP1 = subs[1:round(Int,(0.5+margin)*length(subs))];
-# subsP2 = subs[round(Int,(0.5-margin)*length(subs)):length(subs)];
-
-# if(length(subsP2) != length(subsP1))
-	# println("point clouds size mismatch");
-# end
-#d = zeros(Float32,length(subsP1)*3,npc);
 count = 1;
 ind_array = pFor.P;
 

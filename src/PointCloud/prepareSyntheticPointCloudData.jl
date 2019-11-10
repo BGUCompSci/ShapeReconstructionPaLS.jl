@@ -81,16 +81,13 @@ Wf = reshape(Wf,div(length(Wf),3),3);
 f2(A) = [norm(A[i,:]) for i=1:size(A,1)]
 
 
-println("maximum norm:",maximum(f2(Wf)));
 ind = findall(x -> x > 0.95, f2(Wf));
-println("indices size :",size(ind))
 ind = ind[randperm(length(ind))[1:round(Int,0.5*length(ind))]];
 
 subs = ind2subv(Minv.n,ind);
 subs = sort(subs);
 ind = subv2ind(Minv.n,subs);
 Normals = Wf;
-println("size of normals before choose:",size(Normals));
 
 margin = 0.1;
 npc = 2;
@@ -98,7 +95,6 @@ Parray = Array{Array{Int64,1}}(undef,npc);
 global d = [];
 for i=1:npc
 	cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
-	println("cursubs size:",size(cursubs));
 	for ii = 1:length(cursubs)
 		cursubs[ii] = round.(Int,cursubs[ii] .+ b[i]);
 	end	
@@ -115,9 +111,7 @@ end
 
 
 pFor = getPointCloudParam(Minv,Parray,Normals,margin,theta_phi_PC ,b,1,1,MATFree)
-println("before getdata")
 Dremote,pFor = getData(m[:],pFor);
-println("after getdata")
 
 Data = arrangeRemoteCallPCIntoLocalData(Dremote);
 #Add noise:
