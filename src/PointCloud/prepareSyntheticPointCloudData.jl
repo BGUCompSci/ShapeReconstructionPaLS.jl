@@ -2,9 +2,11 @@
 import LinearAlgebra
 using LinearAlgebra
 using SparseArrays
+using Random
+
 using jInv
 export prepareSyntheticPointCloudData
-
+export subv2ind,ind2subv
 function subv2ind(shape, cindices)
     """Return linear indices given vector of cartesian indices.
     shape: d-tuple of dimensions.
@@ -60,6 +62,8 @@ n = Minv.n;
 m = m[:]
 eps = 1e-4;
 
+
+
 Af   = getFaceAverageMatrix(Minv)
 A1 = Af[:,1:Int(size(Af,2)/3)]; #println("A1 size:",size(A1))
 A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
@@ -72,21 +76,25 @@ D3 = kron(ddx(Minv.n[3]),kron(sparse(1.0I, Minv.n[2], Minv.n[2]),sparse(1.0I, Mi
 nx = A1*(D1'*m);
 ny = A2*(D2'*m);
 nz = A3*(D3'*m);
-Wf = [nx ny nz];
+Wf,J = normalize([nx;ny;nz]);
+Wf = reshape(Wf,div(length(Wf),3),3);
 f2(A) = [norm(A[i,:]) for i=1:size(A,1)]
-nx = Wf[:,1]; ny = Wf[:,2]; nz = Wf[:,3];
+
 
 println("maximum norm:",maximum(f2(Wf)));
-ind = findall(x -> x > 0.8, f2(Wf));
+ind = findall(x -> x > 0.95, f2(Wf));
 println("indices size :",size(ind))
+ind = ind[randperm(length(ind))[1:round(Int,0.5*length(ind))]];
 
 subs = ind2subv(Minv.n,ind);
 subs = sort(subs);
 ind = subv2ind(Minv.n,subs);
-Normals = [nx ny nz];
-margin = 0.45;
+Normals = Wf;
+println("size of normals before choose:",size(Normals));
 
+margin = 0.1;
 npc = 2;
+Parray = Array{Array{Int64,1}}(undef,npc);
 global d = [];
 for i=1:npc
 	cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
@@ -94,8 +102,8 @@ for i=1:npc
 	for ii = 1:length(cursubs)
 		cursubs[ii] = round.(Int,cursubs[ii] .+ b[i]);
 	end	
-	ind = subv2ind(pFor.Mesh.n,cursubs);
-	
+	ind = subv2ind(Minv.n,cursubs);
+	Parray[i] = Array{Int64}(ind);
 	I2 = collect(1:length(ind));
 	J2 = ind;
 	V2 = ones(size(ind));
@@ -106,24 +114,25 @@ for i=1:npc
 end
 
 
-
-pFor = getPointCloudParam(Minv,ind,Normals,margin,theta_phi_dip ,b,1,1,MATFree)
-println("pFor:",pFor);
+pFor = getPointCloudParam(Minv,Parray,Normals,margin,theta_phi_PC ,b,1,1,MATFree)
+println("before getdata")
 Dremote,pFor = getData(m[:],pFor);
+println("after getdata")
+
 Data = arrangeRemoteCallPCIntoLocalData(Dremote);
 #Add noise:
 b = b + noiseTrans*randn(size(b,1),3)
-theta_phi_dip = theta_phi_dip +  noiseAngle*randn(size(theta_phi_dip));
+theta_phi_PC = theta_phi_PC +  noiseAngle*randn(size(theta_phi_PC));
 					
 file = matopen(string(filename,"_data.mat"), "w");
 write(file,"domain",Minv.domain);
 write(file,"n",Minv.n);
 write(file,"Data",Data);
-write(file,"P",ind);
+write(file,"P",Parray);
 write(file,"Normals",Normals);
 write(file,"margin",margin);
 write(file,"b",b);
-write(file,"theta_phi_dip",theta_phi_dip)
+write(file,"theta_phi_PC",theta_phi_PC)
 # write(file,"m_true",m);
 #write(file,"pad",pad);
 close(file);
@@ -141,7 +150,7 @@ P = read(file,"P");
 Normals = read(file,"Normals");
 Margin = read(file,"margin");
 b = read(file,"b");
-theta_phi_dip = read(file,"theta_phi_dip");
+theta_phi_PC = read(file,"theta_phi_PC");
 close(file);
-return n,domain,Data,P,Normals,Margin,b,theta_phi_dip;
+return n,domain,Data,P,Normals,Margin,b,theta_phi_PC;
 end

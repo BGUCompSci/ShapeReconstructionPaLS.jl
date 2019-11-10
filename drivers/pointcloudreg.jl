@@ -103,9 +103,10 @@ misfun = PCFun; ## least squares
 	#########################################################################################################
 	n,domain,Data,P,Normals,Margin,b,theta_phi_dip = readPointCloudDataFile(dipDataFilename);
 	println("initial obtained translation:",b);
-    
-	writedlm(string("simPC",".txt"),convert(Array{Int64},P));
+    P = Array{Array{Int64,1}}(P);
+	writedlm(string("simPC",".txt"),convert(Array{Int64},P[1]));
 	### Set up the dip inversion
+	println("type of p:",typeof(P));
 	pForDip = getPointCloudParam(Mesh,P,Normals,Margin,theta_phi_dip,b,samplingBinning,nWorkers,method);
 	ndips = 2;
 	if(locateRBFwithGrads)
@@ -171,7 +172,7 @@ isRBF10 = 0;
 	mref = zeros(Float32,nAll);
 	m0   = zeros(Float64,n_m_simple);
 	mCenters = zeros(Float32,n_tup);
-	mref[1:numParamOfRBF:n_m_simple] = ParamLevelSet.centerHeavySide*2.0*rand(nRBF);
+	mref[1:numParamOfRBF:n_m_simple] .= ParamLevelSet.centerHeavySide*2.0*rand(nRBF);
 	if isRBF10
 		# here we initialize B as an identity matrix
 		mref[2:10:n_m_simple] .= 0.5;
@@ -203,7 +204,7 @@ isRBF10 = 0;
 	
 	
 
-	alpha = 5e-3;
+	alpha = 5e-2;
 
 	II = (sparse(1.0I, nAll,nAll));
 	regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);
@@ -256,34 +257,17 @@ end
 
 
 function myDump(mc::Vector,Dc,iter,pInv,pMis,method="",ndips=0,noiseAngle=0,noiseTranslation=0,useVisual=false,plotFun=modfunForPlotting)
-	# if resultsFilename!=""
-		# Temp = splitext(resultsFilename);
-		# Temp = string(Temp[1],"_GN",iter,Temp[2]);
-
-			ntup = tuple((pInv.MInv.n)...);
-			fullMc = plotFun(mc)[1];
-
-		
-			fullMc = reshape(IactPlot*fullMc[:],ntup);
-			# fullMc = reshape(fullMc[:],ntup);
-			#close(888);
-			#figure(888);
-			#plotModel(fullMc,true,pInv.MInv);
-			#sleep(1.0);
-			
-				#savefig(string("HandPCIt",iter,"_",ntup,".png"));
-				writedlm(string("HandPCParams_iter_",iter,".dat"),convert(Array{Float64},mc));
-				writedlm(string("HandPCVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
-
-		
-	# end
+		ntup = tuple((pInv.MInv.n)...);
+		fullMc = plotFun(mc)[1];	
+		fullMc = reshape(IactPlot*fullMc[:],ntup);
+		writedlm(string("HandPCParams_iter_",iter,".dat"),convert(Array{Float64},mc));
+		writedlm(string("HandPCVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
 end
 
 pInv = getInverseParam(Mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
                      maxStep = 2e-1,pcgMaxIter=cgit,pcgTol=pcgTol,
 					 minUpdate = 0.01, maxIter = maxit,HesPrec=HesPrec);
 
-# end
 
 #### Projected Gauss Newton
 mc = m0;
@@ -306,7 +290,7 @@ if !(method == MATBased || method == MATFree)
 	outerIter = 150;
 	grad_u = nothing;
 	new_RBF_location = [];
-	@sync for iterNum=2:outerIter
+	for iterNum=2:outerIter
 		println("Inversion using ", nRBF," basis functions")
 		new_nRBF = 1;
 		global times = times + 1;
@@ -316,31 +300,17 @@ if !(method == MATBased || method == MATFree)
 		u = modfunForPlotting(mc)[1];
 		#I = find((u.>0.3) .& (u.<0.6));
 		Ii = P[randperm(length(P))[1:new_nRBF]];
-		println("Iii from P:",Ii);
 		#Ii = findall(x -> x >0.3 && x<0.7,u);
 		#Lets compute the gradient of the misfit function:
-		locateRBFwithGrads = false;
+		locateRBFwithGrads = true;
 		if(locateRBFwithGrads)
 			(m11,theta_phi1,b1) 	= splitRBFparamAndRotationsTranslations(mc,nRBF,ndips,numParamOfRBF)
-			#println("sanity check: len of thetha phi:",size(theta_phi1));
-			#theta_phi1 = theta_phi1[1:nDips,:];
-			#println("sanity check: len of thetha phi updated:",size(theta_phi1));
-			println("update angles");
 			updateAngles(pForDip_MATFree,theta_phi1);
-			Dremote = nothing;
-		
 			pMis_Free = getMisfitParam(pForDip_MATFree, Wd_Dip, dobsDirect, misfun, Iact_free,sback);
-			Dc2 = nothing;
-			F = nothing ; dF = nothing; d2F = nothing; ttimes = 0;
-			println("computing grad misfit")
-			Dc2,F,dF,d2F,global pMis_Free,ttimes = computeMisfit(u,pMis_Free,false);
-			pForMATFREE  = fetch(pForDip_MATFree[1])
-			#put!(pFor,pForMATFREE)
-			println("size of jac:",size(pForMATFREE.Jacobian))
-			println("size :",size(pForMATFREE.Jacobian'*((origm[:] - u[:]).^2)));
-			JtV = pForMATFREE.Jacobian'*((origm[:] - u[:]).^1);
+			computeMisfit(u,pMis_Free);
+			gradMis = computeGradMisfit(u,Dc,pMis_Free)
 			
-			gradMis = JtV.^2;
+			gradMis = gradMis.^2;
 			amax = argmax(gradMis); vmax = maximum(gradMis);
 			sp = sortperm(gradMis,rev = true);
 			sv = sort(gradMis, rev= true);
@@ -357,23 +327,18 @@ if !(method == MATBased || method == MATFree)
     while(Ii[1] in new_RBF_location )#|| Ii.-1 in new_RBF_location || Ii.+1 in new_RBF_location)
       #Ii = findall(x -> x .>0.3 && x.<0.7,u);
 	  #Ii = P[randperm(length(P))[1:new_nRBF]];
-          tmp = sp[1:2000*new_nRBF];
+          tmp = sp[1:100*new_nRBF];
 	  println("size of sp if conflict:",size(tmp));
-	  Ii = tmp[randperm(2000*new_nRBF)[1:new_nRBF]];
+	  Ii = tmp[randperm(100*new_nRBF)[1:new_nRBF]];
       #Ii = Ii[randperm(length(Ii))[1:new_nRBF]];
     end
     	println("length of I",size(Ii));
 		global new_RBF_location = append!(new_RBF_location,Ii);
-		println("new_RBF_location:",new_RBF_location)
-		println("Size of Ii before indices:",size(Ii));
 		#(I1,I2,I3) = ind2sub(n_tup,I);
-		println(ind2subv(n_tup,Ii))
 		#Ii = P[randperm(length(P))[1:new_nRBF]];
 		indices = getindex.(ind2subv(n_tup,Ii),[1 2 3 ]);
 		#indices = ind2subv(n_tup,Ii);
-		println(indices)
-		
-		
+			
 		#I1 = indices[:,1];
 		#I2 = indices[:,2];
 		#I3 = indices[:,3];
@@ -401,7 +366,7 @@ if !(method == MATBased || method == MATFree)
 		mc_new[(n_mc_new+1):end] = mc[(n_mc_old+1):end];
 		mref_new[(n_mc_new+1):end] = mref[(n_mc_old+1):end];
 
-		mc_new[(n_mc_old+1):numParamOfRBF:n_mc_new] .= 1.0; #ParamLevelSet.centerHeavySide - ParamLevelSet.deltaHeavySide;
+		mc_new[(n_mc_old+1):numParamOfRBF:n_mc_new] .= 0.0; #ParamLevelSet.centerHeavySide - ParamLevelSet.deltaHeavySide;
 		mc_new[(n_mc_old+numParamOfRBF-2):numParamOfRBF:n_mc_new] .= X1;
 		mc_new[(n_mc_old+numParamOfRBF-1):numParamOfRBF:n_mc_new] .= X2;
 		mc_new[(n_mc_old+numParamOfRBF):numParamOfRBF:n_mc_new] .= X3;

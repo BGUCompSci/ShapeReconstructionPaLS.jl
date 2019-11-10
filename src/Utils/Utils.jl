@@ -42,7 +42,7 @@ function arrangeRemoteCallPCIntoLocalData(DremoteCall::Array{Future,1})
 N = length(DremoteCall);
 println("length of dremote:",N);
 println("size of dremote[1]:",size(DremoteCall)[1])
-DdivideLocal = Array{Array{Float64,2}}(undef,N);
+DdivideLocal = Array{Array{Float64}}(undef,N);
 for k=1:N
 println("size of fetch",size(fetch(DremoteCall[k])));
 	DdivideLocal[k] = fetch(DremoteCall[k]);
