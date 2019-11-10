@@ -291,14 +291,14 @@ if !(method == MATBased || method == MATFree)
 	new_RBF_location = [];
 	for iterNum=2:outerIter
 		println("Inversion using ", nRBF," basis functions")
-		new_nRBF = 1;
+		new_nRBF = 20;
 		global times = times + 1;
 
 		# Dc - the data using our method.
 		global Dc = Dc;
 		u = modfunForPlotting(mc)[1];
 		#I = find((u.>0.3) .& (u.<0.6));
-		Ii = P[randperm(length(P))[1:new_nRBF]];
+		#Ii = P[randperm(length(P))[1:new_nRBF]];
 		#Ii = findall(x -> x >0.3 && x<0.7,u);
 		#Lets compute the gradient of the misfit function:
 		locateRBFwithGrads = true;
@@ -308,7 +308,6 @@ if !(method == MATBased || method == MATFree)
 			pMis_Free = getMisfitParam(pForDip_MATFree, Wd_Dip, dobsDirect, misfun, Iact_free,sback);
 			computeMisfit(u,pMis_Free);
 			gradMis = computeGradMisfit(u,Dc,pMis_Free)
-			#JtV, v = (dpred - dobs)
 			gradMis = gradMis.^2;
 			amax = argmax(gradMis); vmax = maximum(gradMis);
 			sp = sortperm(gradMis,rev = true);
@@ -323,20 +322,14 @@ if !(method == MATBased || method == MATFree)
     while(Ii[1] in new_RBF_location )#|| Ii.-1 in new_RBF_location || Ii.+1 in new_RBF_location)
       #Ii = findall(x -> x .>0.3 && x.<0.7,u);
 	  #Ii = P[randperm(length(P))[1:new_nRBF]];
-        tmp = sp[1:outerIter*new_nRBF];
+	  #Ii = Ii[randperm(length(Ii))[1:new_nRBF]];
+       tmp = sp[1:outerIter*new_nRBF];
 		Ii = tmp[randperm(outerIter*new_nRBF)[1:new_nRBF]];
-      #Ii = Ii[randperm(length(Ii))[1:new_nRBF]];
+     
     end
 		global new_RBF_location = append!(new_RBF_location,Ii);
-		#(I1,I2,I3) = ind2sub(n_tup,I);
-		#Ii = P[randperm(length(P))[1:new_nRBF]];
 		indices = getindex.(ind2subv(n_tup,Ii),[1 2 3 ]);
-		#indices = ind2subv(n_tup,Ii);
-			
-		#I1 = indices[:,1];
-		#I2 = indices[:,2];
-		#I3 = indices[:,3];
-		I1 = indices[1]; I2= indices[2]; I3 = indices[3];
+		I1 = indices[:,1]; I2= indices[:,2]; I3 = indices[:,3];
 		
 		X1 = I1*Mesh.h[1] .- 0.5*Mesh.h[1]; .+ Mesh.domain[1];
 		X2 = I2*Mesh.h[2] .- 0.5*Mesh.h[2]; .+ Mesh.domain[3];
@@ -381,9 +374,9 @@ if !(method == MATBased || method == MATFree)
 		end
 		pInv.boundsLow = boundsLow;
 		mref_new[1:n_mc_new] = mc_new[1:n_mc_new];
-
-		global mc = mc_new;
 		
+		global mc = mc_new;
+		mref_new[end-9:end] .= 0.0;
 		#II = speye(Float32,length(mc_new));
 		len = Int64(length(mc_new));
 		IIs = sparse(1.0I,len,len);
@@ -400,7 +393,7 @@ if !(method == MATBased || method == MATFree)
 			pInv.mref = mref_new;
 			pInv.alpha *= 0.8;
 		end
-		
+		mc[end-9:end] .= 0.0;
 		mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
 		myDump(mc,0,iterNum,pInv,0,methodName,0,noiseAnglesDeg,noiseTrans,invertVis);
 		
