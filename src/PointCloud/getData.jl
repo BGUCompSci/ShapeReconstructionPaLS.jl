@@ -77,14 +77,16 @@ if pFor.method == MATFree
 		ny = ny[ind];
 		nz = nz[ind];
 		#normals = Af*D*m;
-		normals,J = normalize([nx;ny;nz]);
+		#normals,J = normalize([nx;ny;nz]);
+		normals = [nx;ny;nz];
 		d[count:(count + 3*length(ind) - 1)] = normals;
 		I2 = collect(1:length(ind));
 		J2 = ind;
 		V2 = ones(size(ind));
 		P = sparse(I2,J2,V2,length(ind),length(m));
 		P = blockdiag(P,P,P);
-		J = J*P*Af*D';
+		#J = J*P*Af*D';
+		J = P*Af*D';
 		Jacobian[count:(count + 3*length(ind) - 1),:] = J;
 		count = count + 3*length(ind);
 	end 
@@ -98,18 +100,21 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	else
 		numParamOfRBF = 5;
 	end
-	nRBF 				= div(length(m)- 5*pFor.npcAll,numParamOfRBF) ;
-	(m1,theta_phi,b) 	= splitRBFparamAndRotationsTranslations(m,nRBF,pFor.npcAll,numParamOfRBF);
-	theta_phi 			= theta_phi[pFor.workerSubIdxs,:];
-	b 					= b[pFor.workerSubIdxs,:];
-	mrot,Jrot 			= rotateAndMoveRBF(m1,Minv,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
-	d,JacT 				= getPCDataRBF(pFor, mrot,theta_phi,b,numParamOfRBF);
+	#nRBF 				= div(length(m)- 5*pFor.npcAll,numParamOfRBF) ;
+	#(m1,theta_phi,b) 	= splitRBFparamAndRotationsTranslations(m,nRBF,pFor.npcAll,numParamOfRBF);
+	#theta_phi 			= theta_phi[pFor.workerSubIdxs,:];
+	#b 					= b[pFor.workerSubIdxs,:];
+	#mrot,Jrot 			= rotateAndMoveRBF(m1,Minv,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
+	theta_phi = 0; b =0;
+	d,JacT 				= getPCDataRBF(pFor, m,theta_phi,b,numParamOfRBF);
+	nRBF 				= div(length(m),numParamOfRBF) ;
 	# multiply Jacobian with Jrot, and then take the transpose.
 
 	JacobianT = convert(SparseMatrixCSC{Float64,Int32},spzeros(length(m),prod(size(d))));
 	IpIdxs = getIpIdxs(pFor.workerSubIdxs,nRBF,pFor.npcAll,numParamOfRBF);
-	JacobianT[IpIdxs,:] = Jrot'*JacT;
-	pFor.Jacobian = JacobianT';
+	#JacobianT[IpIdxs,:] = Jrot'*JacT;
+	#JacobianT[IpIdxs,:] = JacT;
+	pFor.Jacobian = JacT';
 end
 return d,pFor;
 end
@@ -118,9 +123,9 @@ function getPCDataRBF(pFor, m, theta_phi,b,numParamOfRBF = 5)
 Mesh = pFor.Mesh;
 n = pFor.Mesh.n;
 h = pFor.Mesh.h;
-ndips = 2;
+ndips = pFor.npcAll;
 volCell = prod(Mesh.h);
-npc = 2;
+npc = ndips;
 eps = 1e-4/Mesh.h[1];
 Af   = getFaceAverageMatrix(Mesh)
 A1 = Af[:,1:Int(size(Af,2)/3)];
@@ -157,14 +162,16 @@ for i=1:npc
 	ny = ny[ind];
 	nz = nz[ind];
 	#normals = Af*D*m;
-	normals,J = normalize([nx;ny;nz]);
+	#normals,J = normalize([nx;ny;nz]);
+	normals = [nx;ny;nz];
 	d[count:(count + 3*length(ind) - 1)] = normals;
 	I2 = collect(1:length(ind));
 	J2 = ind;
 	V2 = ones(size(ind));
 	P = sparse(I2,J2,V2,length(ind),length(u));
 	P = blockdiag(P,P,P);
-	J = J*P*Af*D';
+	#J = J*P*Af*D';
+	J = P*Af*D';
 	#Jacobian[count:(count + 3*length(ind) - 1),:] = J1'*J';
 	count = count + 3*length(ind);
 	Jacobians[i] = J1'*J';

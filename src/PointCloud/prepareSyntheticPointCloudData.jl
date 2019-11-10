@@ -76,28 +76,25 @@ D3 = kron(ddx(Minv.n[3]),kron(sparse(1.0I, Minv.n[2], Minv.n[2]),sparse(1.0I, Mi
 nx = A1*(D1'*m);
 ny = A2*(D2'*m);
 nz = A3*(D3'*m);
-Wf,J = normalize([nx;ny;nz]);
-Wf = reshape(Wf,div(length(Wf),3),3);
+#Wf,J = normalize([nx;ny;nz]);
+#Wf = reshape(Wf,div(length(Wf),3),3);
+Wf = [nx ny nz];
 f2(A) = [norm(A[i,:]) for i=1:size(A,1)]
 
 
-ind = findall(x -> x > 0.95, f2(Wf));
+ind = findall(x -> x > 0.8, f2(Wf));
 ind = ind[randperm(length(ind))[1:round(Int,0.5*length(ind))]];
 
 subs = ind2subv(Minv.n,ind);
-subs = sort(subs);
+subs = sort(subs,rev = true);
 ind = subv2ind(Minv.n,subs);
 Normals = Wf;
 
-margin = 0.1;
-npc = 2;
+margin = 0.5;
 Parray = Array{Array{Int64,1}}(undef,npc);
 global d = [];
 for i=1:npc
 	cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
-	for ii = 1:length(cursubs)
-		cursubs[ii] = round.(Int,cursubs[ii] .+ b[i]);
-	end	
 	ind = subv2ind(Minv.n,cursubs);
 	Parray[i] = Array{Int64}(ind);
 	I2 = collect(1:length(ind));
@@ -127,6 +124,7 @@ write(file,"Normals",Normals);
 write(file,"margin",margin);
 write(file,"b",b);
 write(file,"theta_phi_PC",theta_phi_PC)
+write(file,"npc",npc)
 # write(file,"m_true",m);
 #write(file,"pad",pad);
 close(file);
@@ -145,6 +143,7 @@ Normals = read(file,"Normals");
 Margin = read(file,"margin");
 b = read(file,"b");
 theta_phi_PC = read(file,"theta_phi_PC");
+npc = read(file,"npc")
 close(file);
-return n,domain,Data,P,Normals,Margin,b,theta_phi_PC;
+return n,domain,Data,P,Normals,Margin,b,theta_phi_PC,npc;
 end

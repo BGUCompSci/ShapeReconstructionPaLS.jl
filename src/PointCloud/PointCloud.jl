@@ -54,7 +54,7 @@ function getPointCloudParam(Mesh::RegularMesh,P::Array{Array{Int64,1}}, Normals:
 	pFor   = Array{RemoteChannel}(undef,numWorkers);
 	i = 1; nextidx() = (idx=i; i+=1; idx)
 	idx=i;
-	ndips  = 2;
+	ndips  = length(P);
 	# send out jobs
 	@sync begin
 		for w = ActualWorkers
