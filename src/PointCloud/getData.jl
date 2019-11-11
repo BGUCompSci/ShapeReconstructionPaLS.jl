@@ -93,6 +93,26 @@ if pFor.method == MATFree
 	pFor.Jacobian = Jacobian;
 	return d,pFor;
 end
+
+if pFor.method == RBFBasedSimple || pFor.method == RBF10BasedSimple
+	if pFor.method == RBF10BasedSimple
+		numParamOfRBF = 10;
+	else
+		numParamOfRBF = 5;
+	end
+        println("numparam:",numParamOfRBF);
+	println("m size:",size(m));
+	println("m:",m)
+	theta_phi = pFor.theta_phi_rad;
+	b = pFor.b;
+	println("theta phi:",theta_phi); println("b:",b)
+	mrot,Jrot = rotateAndMoveRBFsimple(m,pFor.Mesh,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
+	println("mrot size:",size(mrot));
+	println("mrot:",mrot)
+	d,JacT = getPCDataRBF(pFor, mrot,theta_phi,b,numParamOfRBF);
+	# multiply Jacobian with Jrot, and then take the transpose.
+	pFor.Jacobian = Jrot'*JacT;
+end
 	
 if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Based
 	if pFor.method == RBF10Based
@@ -106,8 +126,9 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	#b 					= b[pFor.workerSubIdxs,:];
 	#mrot,Jrot 			= rotateAndMoveRBF(m1,Minv,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
 	theta_phi = 0; b =0;
+	nRBF = div(length(m),numParamOfRBF) ;
+	println("size of m:",size(m));
 	d,JacT 				= getPCDataRBF(pFor, m,theta_phi,b,numParamOfRBF);
-	nRBF 				= div(length(m),numParamOfRBF) ;
 	# multiply Jacobian with Jrot, and then take the transpose.
 
 	JacobianT = convert(SparseMatrixCSC{Float64,Int32},spzeros(length(m),prod(size(d))));
@@ -154,6 +175,8 @@ for i=1:npc
 	sigmaH = getDefaultHeavySide();
 	u,I1,J1,V1 = ParamLevelSetModelFunc(Mesh,m[:,i];computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
 	J1 = sparse(I1,J1,V1,prod(n),length(m[:,i]));
+	#u,I1,J1,V1 = ParamLevelSetModelFunc(Mesh,m;computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
+	#J1 = sparse(I1,J1,V1,prod(n),length(m));
 	ind = ind_array[i];
 	nx = A1*(D1'*u);
 	ny = A2*(D2'*u);

@@ -81,7 +81,7 @@ samplingBinning = 1;
 Mesh = getRegularMesh([0.0 5.0 0.0 5.0 0.0 5.0],n);
 pad = div(pad,samplingBinning);
 
-method = RBF10BasedSimple; methodName="RBF10BasedSimple";
+method = RBF10Based; methodName="RBF10Based";
 
 println("Inv mesh:")
 println(Mesh.n)
@@ -92,8 +92,8 @@ println("nworkers=",nWorkers)
 misfun = PCFun; ## least squares
 
 	dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
-	b = [0.0 0 0] #; 0.0 0 0 ]
-	theta_phi_dip = [0.0 0.0] #; 0.0 0.0];
+	b = [0.0 0 0 ]#; 0.0 0 0 ]
+	theta_phi_dip = [0.0 0.0 ]#; 0.0 0.0];
 	noiseTrans = 0.0*prod(Mesh.h);
 	noiseAngles = deg2rad(0.0);
 	npc = 1;
@@ -104,16 +104,15 @@ misfun = PCFun; ## least squares
 	#########################################################################################################
 	n,domain,Data,P,Normals,Margin,b,theta_phi_dip,npc = readPointCloudDataFile(dipDataFilename);
 	println("initial obtained translation:",b);
-        P = Array{Array{Int64,1}}(P);
-	writedlm(string("simPCpart2",".txt"),convert(Array{Int64},P[1]));
-#       writedlm(string("simPCpart1",".txt"),convert(Array{Int64},P[2]));
-#	quit()
+    P = Array{SparseMatrixCSC{Float32,Int32}}(P);
+	Data = Array{Float64,1}(Data);
+	#writedlm(string("simPC",".txt"),convert(Array{Int64},P[1]));
 	### Set up the dip inversion
 	println("type of p:",typeof(P));
-	pForDip = getPointCloudParam(Mesh,P,Normals,Margin,theta_phi_dip,b,samplingBinning,nWorkers,method);
+	pForDip = getPointCloudParam(Mesh,P,Data,Margin,theta_phi_dip,b,samplingBinning,nWorkers,method);
 	ndips = npc;
 	if(locateRBFwithGrads)
-		pForDip_MATFree = getPointCloudParam(Mesh,P,Normals,Margin,theta_phi_dip,b,samplingBinning,nWorkers,MATFree);
+		pForDip_MATFree = getPointCloudParam(Mesh,P,Data,Margin,theta_phi_dip,b,samplingBinning,nWorkers,MATFree);
 	end
 	
 	### Create Dip param if we use the GRAD of MATFREE to locate new RBFs
@@ -142,7 +141,7 @@ isRBF10 = 0;
 ###############################################################################################
 
 
-	nRBF = 20;
+	nRBF = 1;
 	
 	isRBF10 = (method == RBF10BasedSimple1 || method==RBF10BasedSimple2 || method==RBF10Based);
 	isSimple = (method==RBFBasedSimple1 || method==RBF10BasedSimple1 || method==RBFBasedSimple2 || method==RBF10BasedSimple2);
@@ -202,13 +201,13 @@ isRBF10 = 0;
 	end
 	
 	mref[:] = m0;
-	m0[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .+= 0.2*(Mesh.domain[2] - Mesh.domain[1])*randn(nRBF);
-	m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.2*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
-	m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.2*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
+	m0[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .+= 0.1*(Mesh.domain[2] - Mesh.domain[1])*randn(nRBF);
+	m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.1*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
+	m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.1*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
 	
 	
 
-	alpha = 5e-0;
+	alpha = 5e-3;
 
 	II = (sparse(1.0I, nAll,nAll));
 	regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);
@@ -264,8 +263,8 @@ function myDump(mc::Vector,Dc,iter,pInv,pMis,method="",ndips=0,noiseAngle=0,nois
 		ntup = tuple((pInv.MInv.n)...);
 		fullMc = plotFun(mc)[1];	
 		fullMc = reshape(IactPlot*fullMc[:],ntup);
-		writedlm(string("twoHand1PCParams_iter_",iter,".dat"),convert(Array{Float64},mc));
-		writedlm(string("twoHand1PCVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
+		writedlm(string("HandPCParams_iter_",iter,".dat"),convert(Array{Float64},mc));
+		writedlm(string("HandPCVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
 end
 
 pInv = getInverseParam(Mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
@@ -275,12 +274,12 @@ pInv = getInverseParam(Mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
 
 #### Projected Gauss Newton
 mc = m0;
-pInv.maxIter = 100;
+pInv.maxIter = 10;
 Dc = nothing;
 mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
 
 
-pInv.maxIter = 10;
+pInv.maxIter = 20;
 myDump(mc,0,1,pInv,0,"",0,noiseAnglesDeg,noiseTrans,invertVis);
 
 
@@ -290,12 +289,12 @@ times=0;
 
 
 if !(method == MATBased || method == MATFree)
-	outerIter = 300;
+	outerIter = 150;
 	grad_u = nothing;
 	new_RBF_location = [];
 	for iterNum=2:outerIter
 		println("Inversion using ", nRBF," basis functions")
-		new_nRBF =10;
+		new_nRBF = 2;
 		global times = times + 1;
 
 		# Dc - the data using our method.
@@ -317,7 +316,6 @@ if !(method == MATBased || method == MATFree)
 			amax = argmax(gradMis); vmax = maximum(gradMis);
 			sp = sortperm(gradMis,rev = true);
 			Ii = sp[1:new_nRBF];
-			writedlm(string("gradMisfit",".txt"),convert(Array{Float64},gradMis[:]))
 		end
 		
 		if length(Ii) > new_nRBF
@@ -368,9 +366,9 @@ if !(method == MATBased || method == MATFree)
 		boundsLow = zeros(Float32,length(mc_new)) .+ a;
 		boundsLow[1:n_mc_old] = pInv.boundsLow[1:n_mc_old];
 		if isRBF10
-			mc_new[(n_mc_old+2):10:n_mc_new] .= 3.0;
-			mc_new[(n_mc_old+5):10:n_mc_new] .= 3.0;
-			mc_new[(n_mc_old+7):10:n_mc_new] .= 3.0;
+			mc_new[(n_mc_old+2):10:n_mc_new] .= 1.0;
+			mc_new[(n_mc_old+5):10:n_mc_new] .= 1.0;
+			mc_new[(n_mc_old+7):10:n_mc_new] .= 1.0;
 			boundsLow[(n_mc_old+2):10:n_mc_new] .= 0.05;
 			boundsLow[(n_mc_old+5):10:n_mc_new] .= 0.05;
 			boundsLow[(n_mc_old+7):10:n_mc_new] .= 0.05;

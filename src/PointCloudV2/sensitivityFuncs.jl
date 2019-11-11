@@ -17,7 +17,6 @@ export getSensTMatVec
 function getSensTMatVec(v::Vector,m::Vector,pFor::PointCloudParam)
 	JtV = 0;
 	S = pFor.Jacobian;
-	println("v size:",size(v)); println("m size:",size(m)); println("J size:",size(S));
 	JtV = S'*v[:];
 return JtV;
 end
