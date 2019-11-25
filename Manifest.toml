@@ -53,6 +53,12 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
+[[Distances]]
+deps = ["LinearAlgebra", "Statistics"]
+git-tree-sha1 = "23717536c81b63e250f682b0e0933769eecd1411"
+uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+version = "0.8.2"
+
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -105,6 +111,12 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
+[[NearestNeighbors]]
+deps = ["Distances", "LinearAlgebra", "Mmap", "StaticArrays", "Test"]
+git-tree-sha1 = "f47c5d97cf9a8caefa47e9fa9d99d8fda1a65154"
+uuid = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+version = "0.4.3"
+
 [[OrderedCollections]]
 deps = ["Random", "Serialization", "Test"]
 git-tree-sha1 = "c4c13474d23c60d20a67b217f1d7f22a40edf8f1"
@@ -118,12 +130,12 @@ uuid = "ccf9b6e2-7ea7-596a-9d65-09863b18e8cc"
 version = "0.1.1"
 
 [[ParamLevelSet]]
-deps = ["LinearAlgebra", "SparseArrays", "Test", "jInv"]
-git-tree-sha1 = "a5de197da31ab04c6b5682e8ee37c9db9899f8e1"
+deps = ["Distances", "LinearAlgebra", "NearestNeighbors", "Random", "SparseArrays", "Test", "jInv"]
+git-tree-sha1 = "5d997c498acc894c4a15f1f7ee938946f6a2f007"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaInv/ParamLevelSet.jl.git"
 uuid = "8d29aade-bbbb-4e96-8513-97d62a9e81a0"
-version = "0.1.0"
+version = "0.1.1"
 
 [[Parameters]]
 deps = ["OrderedCollections"]
@@ -163,6 +175,12 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 [[SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[[StaticArrays]]
+deps = ["LinearAlgebra", "Random", "Statistics"]
+git-tree-sha1 = "5a3bcb6233adabde68ebc97be66e95dcb787424c"
+uuid = "90137ffa-7385-5640-81b9-e52037218182"
+version = "0.12.1"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]

@@ -1,7 +1,7 @@
 
 ### matrix free S (slicing) matrix
 
-function binfunc(ii::Int32,binFactor::Int32)
+function binfunc(ii::Int64,binFactor::Int64)
 	ii -=1;
 	ii = div(ii,binFactor);
 	ii +=1;
@@ -123,9 +123,10 @@ elseif pFor.method == RBFBasedSimple1 || pFor.method == RBF10BasedSimple1
 	if norm(b) > 0.0
 		warn("RBFBasedSimple1 and RBF10BasedSimple1 do not support built in translation.");
 	end
-	sigmaH = getDefaultHeavySide();
-	u,I1,J1,V1 = ParamLevelSetModelFunc(Mesh,m;computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
-	J1 = sparse(I1,J1,V1,prod(n),length(m));
+	sigmaH = getDefaultHeaviside();
+	u,JBuilder = ParamLevelSetModelFunc(Mesh,m;computeJacobian = 1,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
+	# J1 = sparse(I1,J1,V1,prod(n),length(m));
+	J1 = getSparseMatrix(JBuilder);
 	if length(pFor.S)==0
 		pFor.S = generateSamplingMatrix(Mesh,theta_phi,samplingBinning);
 	end
@@ -177,27 +178,24 @@ traceLength = div(n[3],samplingBinning);
 ndips = size(theta_phi,1);
 d = zeros(Float32,traceLength,ndips);
 lengthRBFparams = size(mrot,1);
-Ihuge = zeros(Int32,0);
-I1 = zeros(Int32,0);
-J1 = zeros(Int32,0);
-V1 = zeros(Float64,0);
-sigmaH = getDefaultHeavySide();
+JBuilder = getSpMatBuilder(Int64,Float64,traceLength,lengthRBFparams,10*traceLength)
+sigmaH = getDefaultHeaviside();
 u = zeros(prod(n));
 dsu = zeros(prod(n));
 Xc = convert(Array{Float32,2},getCellCenteredGrid(Mesh));
-binningFactor = convert(Int32,n[1]*n[2]*samplingBinning);
-Jacobians = Array{SparseMatrixCSC{Float64,Int32}}(undef, ndips);
+binningFactor = n[1]*n[2]*samplingBinning;
+Jacobians = Array{SparseMatrixCSC{Float64,Int64}}(undef, ndips);
 
 iifunc = (ii)->binfunc(ii,binningFactor)
 nz = 1;
 volCell = prod(Mesh.h);
 for ii = 1:ndips
 	u = vec(u);
-	u,I1,J1,V1,Ihuge = ParamLevelSetModelFunc(Mesh,mrot[:,ii];computeJacobian = 1,sigma = sigmaH,
-				Xc = Xc,u = u,dsu = dsu,Ihuge = Ihuge,Is = I1, Js = J1,Vs = V1,iifunc = iifunc,numParamOfRBF=numParamOfRBF);
+	u,JBuilder = ParamLevelSetModelFunc(Mesh,mrot[:,ii];computeJacobian = 1,sigma = sigmaH,
+				Xc = Xc,u = u,dsu = dsu,Jbuilder = JBuilder,iifunc = iifunc,numParamOfRBF=numParamOfRBF);
 	u = reshape(u,tuple(n...));
 	d[:,ii] = sampleSlices(u,volCell,samplingBinning);
-	Jacobians[ii] = sparse(J1,I1,V1,lengthRBFparams,traceLength);
+	Jacobians[ii] = getSparseMatrixTransposed(JBuilder);
 	(Jacobians[ii].nzval).*=volCell;
 end
 JacT = blockdiag(Jacobians...);

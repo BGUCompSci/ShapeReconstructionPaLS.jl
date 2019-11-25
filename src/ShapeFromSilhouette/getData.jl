@@ -16,7 +16,7 @@ numParamOfRBF = 5;
 
 b = pFor.b;
 
-heavySideVisData = (d)->heavySide!(d,copy(d),0.5,0.5); 
+heavisideVisData = (d)->heavySide!(d,copy(d),0.5,0.5); 
 
 if pFor.method == MATBased
 	error("Not working well. need to fix projection matrix.");
@@ -28,9 +28,6 @@ if pFor.method == MATBased
 	# d = pFor.Jacobian'*m[:];
 	# d = reshape(d,div(length(d),nshots),nshots);
 elseif pFor.method == MATFree
-	# println("MAT-free version")
-	
-	
 	if length(pFor.SampleMatT) == 0
 		pFor.SampleMatT = generateProjectionOperator(pFor);
 	end
@@ -47,11 +44,11 @@ elseif pFor.method == MATFree
 		d[:,ii] = softMaxProjection(pFor.SampleMatT,mr[:]);
 	end
 	# if isempty(mask)
-		# dsd = heavySideVisData(d);
+		# dsd = heavisideVisData(d);
 		# pFor.Jacobian = dsd[:]; ## this is a bit of a hack...
 	# else
 		# dt = copy(d);
-		# dsd = heavySideVisData(d);
+		# dsd = heavisideVisData(d);
 		# d = mask.*d + (1.0-mask).*dt;
 		# pFor.Jacobian = mask.*(dsd[:]) + (1.0-mask); ## this is a bit of a hack...
 	# end
@@ -77,12 +74,11 @@ elseif pFor.method == RBFBasedSimple2 || pFor.method == RBF10BasedSimple2
 	else
 		numParamOfRBF = 5;
 	end
-	
 	if length(pFor.SampleMatT) == 0
 		pFor.SampleMatT = generateProjectionOperator(pFor);
 	end
 	mrot,Jrot = rotateAndMoveRBFsimple(m,Mesh,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
-	d,JacT = getVisDataRBF(pFor, mrot,theta_phi,b,mask,heavySideVisData,numParamOfRBF);
+	d,JacT = getVisDataRBF(pFor, mrot,theta_phi,b,mask,heavisideVisData,numParamOfRBF);
 	# multiply Jacobian with Jrot, and then take the transpose.
 	pFor.Jacobian = Jrot'*JacT;
 elseif pFor.method == RBFBased || pFor.method == RBF10Based
@@ -100,7 +96,7 @@ elseif pFor.method == RBFBased || pFor.method == RBF10Based
 	theta_phi 			= theta_phi[pFor.workerSubIdxs,:];
 	b 					= b[pFor.workerSubIdxs,:];
 	mrot,Jrot 			= rotateAndMoveRBF(m1,Mesh,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
-	d,JacT 				= getVisDataRBF(pFor, mrot,theta_phi,b,mask,heavySideVisData,numParamOfRBF);
+	d,JacT 				= getVisDataRBF(pFor, mrot,theta_phi,b,mask,heavisideVisData,numParamOfRBF);
 	# multiply Jacobian with Jrot, and then take the transpose.
 	Idxs = 				getIpIdxs
 	
@@ -117,7 +113,7 @@ return d,pFor;
 end
 
 
-function getVisDataRBF(pFor, mrot,theta_phi,b,mask,heavySideVisData::Function,numParamOfRBF = 5)
+function getVisDataRBF(pFor, mrot,theta_phi,b,mask,heavisideVisData::Function,numParamOfRBF = 5)
 Mesh = pFor.ObjMesh;
 n = Mesh.n;
 h = Mesh.h;
@@ -129,35 +125,37 @@ Ihuge = zeros(Int32,0);
 I1 = zeros(Int32,0);
 J1 = zeros(Int32,0);
 V1 = zeros(Float64,0);
-sigmaH = getDefaultHeavySide();
+
+JBuilder = getSpMatBuilder(Int64,Float64,prod(n),lengthRBFparams,10*prod(n))
+
+sigmaH = getDefaultHeaviside();
 u = zeros(prod(n));
 dsu = zeros(prod(n));
 Xc = convert(Array{Float32,2},getCellCenteredGrid(Mesh));
 
-Jacobians = Array{SparseMatrixCSC{Float64,Int32}}(undef,nshots);
+Jacobians = Array{SparseMatrixCSC{Float64,Int64}}(undef,nshots);
 
 nz = 1;
 volCell = prod(Mesh.h);
 
 for ii = 1:nshots
-	u,I1,J1,V1,Ihuge = ParamLevelSetModelFunc(Mesh,mrot[:,ii];computeJacobian = 1,sigma = sigmaH,
-										Xc = Xc,u = u,dsu = dsu,Ihuge = Ihuge,Is = I1, Js = J1,Vs = V1,numParamOfRBF=numParamOfRBF);
+	u,JBuilder = ParamLevelSetModelFunc(Mesh,mrot[:,ii];computeJacobian = 1,sigma = sigmaH,
+										Xc = Xc,u = u,dsu = dsu,Jbuilder = JBuilder,numParamOfRBF=numParamOfRBF);
 	
 	
 	#d[:,ii],Jii = softMaxProjWithSensMat(pFor.SampleMatT,u);
 	
 	d[:,ii],Jii = softMaxProjWithSigmoid(pFor.SampleMatT,u)
-	
-	Jii = (sparse(J1,I1,V1,lengthRBFparams,prod(n))*Jii);
+	Jii = getSparseMatrixTransposed(JBuilder)*Jii;
 	# dii = pFor.SampleMatT'*u[:];
-	# Jii = sparse(J1,I1,V1,lengthRBFparams,prod(n))*pFor.SampleMatT;
+	# Jii = getSparseMatrixTransposed(JBuilder)*pFor.SampleMatT;
 	# if isempty(mask)
-		# dsdii = heavySideVisData(dii);
+		# dsdii = heavisideVisData(dii);
 		# Jii = Jii*spdiagm(dsdii[:]);
 	# else
 		# maskii = mask[:,ii];
 		# dt = copy(dii);
-		# dsdii = heavySideVisData(dii);
+		# dsdii = heavisideVisData(dii);
 		# dii = maskii.*dii + (1.0-maskii).*dt;
 		# Jii = Jii*spdiagm(maskii.*(dsdii[:]) + (1.0-maskii));
 	# end 

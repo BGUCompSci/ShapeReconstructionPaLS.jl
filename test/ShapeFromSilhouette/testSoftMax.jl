@@ -8,20 +8,24 @@ using Statistics
 using Distributed
 using LinearAlgebra
 using SparseArrays
+using Test
 
+println("Test SoftMax")
 n = 20;
 m = 10;
 u = rand(20);
-At = sprand(m,n,4.0/m);
+At = sprand(n,m,4.0/m);
 At.nzval[:] .= 1.0;
-At = SparseMatrixCSC(At');
+
 
 d0,Jt = softMaxProjWithSensMat(At,u);
 
 du0 = 0.01*randn(size(u));
 
-println(norm(maximum((At')*spdiagm(0 => u)) .- d0))
-
+U = spdiagm(0 => u);
+dataMax = maximum(At'*U,dims=2);
+r = norm(dataMax .- d0)./norm(d0);
+@test r < 0.025
 for ii = 1:8
 	du = (0.5^ii)*du0;
 	ut = u + du;

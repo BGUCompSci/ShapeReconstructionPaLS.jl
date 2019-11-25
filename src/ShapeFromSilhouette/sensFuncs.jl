@@ -38,20 +38,7 @@ export getSensTMatVec
 function getSensTMatVec(v::Vector,m::Vector,pFor::SfSParam)
 JtV = 0;	
 if pFor.method == MATFree
-	error("Implement this!!!");
-	Mesh = pFor.Mesh;
-	n = Mesh.n;
-	theta_phi = pFor.theta_phi_rad;
-	ndips = size(theta_phi,1);
-	sampleBinning = pFor.samplingBinning;
-	traceLength = div(n[3],sampleBinning);
-	d = reshape(v,traceLength,ndips);
-	u = zeros(tuple(n...));
-	JtV = zeros(size(m));
-	for ii = 1:ndips
-		sampleSlicesT(d[:,ii],prod(Mesh.h),u);
-		JtV += rotateAndMove3DTranspose(u,theta_phi[ii,:],zeros(3))[:];
-	end
+	error("TODO: implement this!!!");
 else
 	S = pFor.Jacobian;
 	JtV = S*v[:];

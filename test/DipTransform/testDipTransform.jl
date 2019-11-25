@@ -17,7 +17,7 @@ alpha = [1.5;2.5;2.0;-1.0];
 beta = [1.0;2.0;-1.6;1.5];
 Xs = [1.5 1.5 1.5 ; 2.0 2.0 2.0; 1.2 2.3 1.5; 2.2 1.5 2.0];
 m = wrapTheta(alpha,beta,Xs);
-sigmaH = getDefaultHeavySide();
+sigmaH = getDefaultHeaviside();
 u, = ParamLevelSetModelFunc(Mesh,m;computeJacobian=0,sigma = sigmaH);
 samplingBinning = 2;
 
