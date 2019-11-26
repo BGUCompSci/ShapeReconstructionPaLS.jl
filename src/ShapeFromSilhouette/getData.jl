@@ -2,7 +2,7 @@ using SparseArrays
 using LinearAlgebra
 SigmoidFunc(x) =(0.5*tanh.(5*(x.-0.5)).+0.5 .+ (1-0.5*tanh.(5*(1-0.5))-0.5).*2 .*(x.-0.5));
 dsigmoidFunc(x) = 0.0133857 .+ 2.5*((sech.(5*(-0.5 .+ x))).^2);
-export getData
+export getData,SigmoidFunc
 function getData(m::Array,pFor::SfSParam,doClear::Bool=false)
 d = 0;
 Mesh = pFor.ObjMesh;
@@ -39,19 +39,10 @@ elseif pFor.method == MATFree
 	XTT = zeros(0);
 	for ii = 1:nshots
 		doTranspose = false;
-		(mr,XT,XTT) = rotateAndMove3D(m,theta_phi[ii,:],b[ii,:],doTranspose,mr,XT,XTT);
-		# d[:,ii] = pFor.SampleMatT'*mr[:];
+		(mr,XT,XTT) = rotateAndMove3D(m,theta_phi[ii,:],(b[ii,:]./Mesh.h),doTranspose,mr,XT,XTT);
 		d[:,ii] = softMaxProjection(pFor.SampleMatT,mr[:]);
 	end
-	# if isempty(mask)
-		# dsd = heavisideVisData(d);
-		# pFor.Jacobian = dsd[:]; ## this is a bit of a hack...
-	# else
-		# dt = copy(d);
-		# dsd = heavisideVisData(d);
-		# d = mask.*d + (1.0-mask).*dt;
-		# pFor.Jacobian = mask.*(dsd[:]) + (1.0-mask); ## this is a bit of a hack...
-	# end
+	
 elseif pFor.method == RBFBasedSimple1 || pFor.method == RBF10BasedSimple1
 	error("Not working well. need to fix projection matrix.");
 	# if pFor.method == RBF10BasedSimple1
@@ -121,11 +112,6 @@ traceLength = prod(pFor.ScreenMeshX2X3.n);
 nshots = size(theta_phi,1);
 d = zeros(Float32,traceLength,nshots);
 lengthRBFparams = size(mrot,1);
-Ihuge = zeros(Int32,0);
-I1 = zeros(Int32,0);
-J1 = zeros(Int32,0);
-V1 = zeros(Float64,0);
-
 JBuilder = getSpMatBuilder(Int64,Float64,prod(n),lengthRBFparams,10*prod(n))
 
 sigmaH = getDefaultHeaviside();
@@ -143,35 +129,74 @@ for ii = 1:nshots
 										Xc = Xc,u = u,dsu = dsu,Jbuilder = JBuilder,numParamOfRBF=numParamOfRBF);
 	
 	
-	#d[:,ii],Jii = softMaxProjWithSensMat(pFor.SampleMatT,u);
-	
+	# d[:,ii] = softMaxProjWithSensMat(pFor.SampleMatT,u);
 	d[:,ii],Jii = softMaxProjWithSigmoid(pFor.SampleMatT,u)
 	Jii = getSparseMatrixTransposed(JBuilder)*Jii;
-	# dii = pFor.SampleMatT'*u[:];
-	# Jii = getSparseMatrixTransposed(JBuilder)*pFor.SampleMatT;
-	# if isempty(mask)
-		# dsdii = heavisideVisData(dii);
-		# Jii = Jii*spdiagm(dsdii[:]);
-	# else
-		# maskii = mask[:,ii];
-		# dt = copy(dii);
-		# dsdii = heavisideVisData(dii);
-		# dii = maskii.*dii + (1.0-maskii).*dt;
-		# Jii = Jii*spdiagm(maskii.*(dsdii[:]) + (1.0-maskii));
-	# end 
-	# d[:,ii] = dii;
 	Jacobians[ii] = Jii;
 end
-#JacT = blkdiag(Jacobians...);
 JacT = blockdiag(Jacobians...);
-# JacT = 0.0;
 return d,JacT
 end
 
+export softMaxProjWithSigmoid
+function softMaxProjWithSigmoid(Proj_g::SparseMatrixCSC,u::Vector{Float64})
+	etta = 40.0;
+	Proj = u.*Proj_g;
+	dropzeros(Proj);
+	for rayIdx = 1:size(Proj,2)
+		# if Proj.colptr[rayIdx+1] > Proj.colptr[rayIdx]
+			# println(Proj.nzval[Proj.colptr[rayIdx]:Proj.colptr[rayIdx+1]-1])
+		# end
+		kmax = Proj.colptr[rayIdx];
+		for k = (Proj.colptr[rayIdx]+1):(Proj.colptr[rayIdx+1]-1)		
+			if Proj.nzval[k] < Proj.nzval[kmax] + 1e-5
+				@inbounds Proj.nzval[k] = 0.0;
+			else
+				kmax = k;
+			end
+		end
+		# if Proj.colptr[rayIdx+1] > Proj.colptr[rayIdx]
+			# println(Proj.nzval[Proj.colptr[rayIdx]:Proj.colptr[rayIdx+1]-1])
+			# println("~~~~~~~~~~~~~~~~~~~")
+		# end
+		
+	end
+	dropzeros(Proj)
+	Proj.nzval[:].=1.0;
+	relevant = findall(sum(Proj,dims=2)[:].> 1e-16);
+	y = zeros(size(u));
+	v = zeros(size(u));
+	y[relevant]  = exp.(etta*u[relevant]);
+	Ay = Proj'*y;
+	v[relevant]  = y[relevant].*u[relevant];
+	Av = Proj'*v;
+	AYinv = 1.0./(Ay .+ 1e-7);
+	ans2 = SigmoidFunc(Av.*AYinv);
+	dsig = dsigmoidFunc(Av.*AYinv)
+	
+	dy = etta*y;
+	dv = etta*y.*u + y;
+	
+	
+	#Ans = sig(Av./Ay) => J_ans = dsig(Av./Ay)*(dAv./Ay) - dsig(Av./Ay)*(Av*dy/Ay*Ay) 
+	# dsig(Av./Ay)*Proj*spdiagm(dv)*Proj*spdiagm(AYinv) - dsig(Av./Ay)
+	# Jt = spdiagm(dsig(Av./Ay))*spdiagm(dv)*Proj*spdiagm(AYinv) - spdiagm(dsig(Av./Ay))*spdiagm(dy)*Proj*spdiagm(AYinv.*AYinv.*Av)
+	for j = 1:size(Proj,2)
+		@inbounds AYinv_j = AYinv[j];
+		@inbounds Av_j = Av[j];
+		for gidx = Proj.colptr[j]:(Proj.colptr[j+1]-1)
+			@inbounds nzv = Proj.nzval[gidx];
+			@inbounds i = Proj.rowval[gidx];
+			@inbounds Proj.nzval[gidx] = dsig[j]*dv[i]*nzv*AYinv_j - dsig[j]*dy[i]*nzv*AYinv_j*AYinv_j*Av_j;
+		end
+	end
+	dropzeros(Proj);
+	return ans2,Proj;
+end
 
 export softMaxProjection
 function softMaxProjection(Proj::SparseMatrixCSC,u::Vector{Float64})
-	etta = 50.0;
+	etta = 40.0;
 	y  = exp.(etta*u);
 	Ay = Proj'*y;
 	v  = y.*u;
@@ -183,112 +208,21 @@ end
 
 export softMaxSensMatVec
 function softMaxSensMatVec(Proj::SparseMatrixCSC,u::Vector{Float64},vec::Vector{Float64})
-	etta = 50.0;
+	etta = 40.0;
 	y  = exp.(etta*u);
 	Ay = Proj'*y;
 	v  = y.*u;
 	Av = Proj'*v;
 	dy = etta*y;
 	dv = etta*y.*u + y;
-	AYinv = 1.0./(Ay .+ 1e-10);
+	AYinv = 1.0./(Ay .+ 1e-7);
 	# Jt = spdiagm(dv)*Proj*spdiagm(AYinv) - spdiagm(dy)*Proj*spdiagm(AYinv.*AYinv.*Av);
 	Jvec = AYinv.*(Proj'*(dv.*vec)) - AYinv.*AYinv.*Av.*(Proj'*(dy.*vec))
 	return Jvec;
 end
-
-
-export softMaxProjWithSigmoid
-function softMaxProjWithSigmoid(Proj::SparseMatrixCSC,u::Vector{Float64})
-	etta = 50.0;
-	
-	Rays = u.*Proj;
-	#ans=zeros(size(Rays,2));
-	#Iterate over the rays:
-	d  = diff(Rays,dims = 1);
-	#indices = find(d.<0);
-	indices = findall(x -> x .< 0, d);
-	#print(indices)
-	#indices = Int64(indices)
-	#indices = indices .+ 1 ;
-
-	#Proj[deleteat!(collect(1:length(Proj)),indices)] = 0;
-	Proj[indices] .= 0;
-	
-	
-	# for rayIdx = 1:size(Rays,2)
-		# currRay = copy(Rays[:,rayIdx]);
-		# d  = diff(currRay);
-		# indices = find(d.<0);
-		# # nonZind = findnz(Proj[:,rayIdx])
-		# # nonZind = nonZind[1]
-		# # #Find indices where we go up:
-		# # indices=[];
-		# # count=1;
-		 # # for i=1:length(nonZind)-1#(length(currRay)-1)
-			 # # if(count > 10)
-				# # break;
-			# # end
-			# # iidx = nonZind[i]
-			# # nextiidx = nonZind[i+1]
-			# # if(currRay[iidx]<=currRay[nextiidx] && currRay[iidx]>0.5)
-				# # append!(indices,iidx);
-				# # count = count + 1;
-			# # #elseif (count>1 && indices[count-1] == i-1) #that's the point of change (value decreases after this point)
-			# # #	append!(indices,i);
-			# # #	count = count + 1;
-			# # end
-		# # end
-		# #currRay = currRay[indices];
-		# #y = exp.(etta*currRay);
-		# #softMax_ray = y./sum(y);
-		# #ans[rayIdx] = SigmoidFunc(sum(softMax_ray.*currRay));
-		
-		# #Preparation for Jacobian computation:
-		# currRay =(Proj[:,rayIdx]);
-		# currRay[deleteat!(collect(1:length(currRay)),indices)] = 0;
-		# Proj[:,rayIdx] = currRay;
-	# end
-	
-	dropzeros(Proj)
-	y  = exp.(etta*u);
-	Ay = Proj'*y;
-	v  = y.*u;
-	Av = Proj'*v;
-	dy = etta*y;
-	dv = etta*y.*u + y;
-	AYinv = 1.0./(Ay .+ 1e-10);
-	ans2 = SigmoidFunc(Av.*AYinv);
-	
-	#Test for answer:
-	#println("Diff in ans:",abs(ans2-ans))
-	
-	dsig = dsigmoidFunc(Av.*AYinv)
-	
-	Jtt = copy(Proj);
-	
-	dropzeros(Jtt)
-	#Ans = sig(Av./Ay) => J_ans = dsig(Av./Ay)*(dAv./Ay) - dsig(Av./Ay)*(Av*dy/Ay*Ay) 
-	# dsig(Av./Ay)*Proj*spdiagm(dv)*Proj*spdiagm(AYinv) - dsig(Av./Ay)
-	# Jt = spdiagm(dsig(Av./Ay))*spdiagm(dv)*Proj*spdiagm(AYinv) - spdiagm(dsig(Av./Ay))*spdiagm(dy)*Proj*spdiagm(AYinv.*AYinv.*Av)
-	for j = 1:size(Jtt,2)
-		@inbounds AYinv_j = AYinv[j];
-		@inbounds Av_j = Av[j];
-		for gidx = Jtt.colptr[j]:(Jtt.colptr[j+1]-1)
-			@inbounds nzv = Jtt.nzval[gidx];
-			@inbounds i = Jtt.rowval[gidx];
-			@inbounds Jtt.nzval[gidx] = dsig[j]*dv[i]*nzv*AYinv_j - dsig[j]*dy[i]*nzv*AYinv_j*AYinv_j*Av_j;
-		end
-	end
-	dropzeros(Jtt)
-	
-	
-	return ans2,Jtt;
-end
-
-
 export softMaxProjWithSensMat
 function softMaxProjWithSensMat(Proj::SparseMatrixCSC,u::Vector{Float64})
-	etta = 50.0;
+	etta = 40.0;
 	y  = exp.(etta*u);
 	Ay = Proj'*y;
 	v  = y.*u;
@@ -297,7 +231,7 @@ function softMaxProjWithSensMat(Proj::SparseMatrixCSC,u::Vector{Float64})
 	
 	dy = etta*y;
 	dv = etta*y.*u + y;
-	AYinv = 1.0./(Ay .+ 1e-10);
+	AYinv = 1.0./(Ay .+ 1e-7);
 	# The code below does this line only much faster:
 	# Jt = spdiagm(dv)*Proj*spdiagm(AYinv) - spdiagm(dy)*Proj*spdiagm(AYinv.*AYinv.*Av);
 	Jtt = copy(Proj);

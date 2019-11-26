@@ -15,16 +15,15 @@ if pFor.method == MATFree
 	n = pFor.ObjMesh.n;
 	d = zeros(Float32,traceLength,nshots);
 	v = reshape(v,tuple(n...));
+	m = reshape(m,tuple(n...));
 	vr = zeros(eltype(v),size(v));
 	XT = zeros(0);
 	XTT = zeros(0);
-	b = zeros(nshots,3);
 	for ii = 1:nshots
-		(vr,XT,XTT) = rotateAndMove3D(v,pFor.theta_phi_rad[ii,:],b[ii,:],false,vr,XT,XTT);
-		# d[:,ii] = pFor.SampleMatT'*vr[:];
-		d[:,ii] = softMaxSensMatVec(pFor.SampleMatT,m,vr[:]);
+		(vr,XT,XTT) = rotateAndMove3D(v,pFor.theta_phi_rad[ii,:],(pFor.b[ii,:]./(pFor.ObjMesh.h)),false,vr,XT,XTT);
+		# (mr,XT,XTT) = rotateAndMove3D(m,pFor.theta_phi_rad[ii,:],(pFor.b[ii,:]./(pFor.ObjMesh.h)),false,vr,XT,XTT);
+		d[:,ii] = softMaxSensMatVec(pFor.SampleMatT,m[:],vr[:]);
 	end
-	# d = d[:].*pFor.Jacobian;
 	# d = reshape(d,traceLength,nshots);
 	return d;
 else
@@ -38,7 +37,7 @@ export getSensTMatVec
 function getSensTMatVec(v::Vector,m::Vector,pFor::SfSParam)
 JtV = 0;	
 if pFor.method == MATFree
-	error("TODO: implement this!!!");
+	error("TODO: not implemented.");
 else
 	S = pFor.Jacobian;
 	JtV = S*v[:];

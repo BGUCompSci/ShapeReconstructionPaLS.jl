@@ -131,7 +131,7 @@ version = "0.1.1"
 
 [[ParamLevelSet]]
 deps = ["Distances", "LinearAlgebra", "NearestNeighbors", "Random", "SparseArrays", "Test", "jInv"]
-git-tree-sha1 = "5d997c498acc894c4a15f1f7ee938946f6a2f007"
+git-tree-sha1 = "3481a1d74aa1df6a559246768ca953cc63008a41"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaInv/ParamLevelSet.jl.git"
 uuid = "8d29aade-bbbb-4e96-8513-97d62a9e81a0"

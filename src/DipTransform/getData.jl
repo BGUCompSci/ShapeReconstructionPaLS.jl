@@ -68,7 +68,6 @@ elseif pFor.method == MATFree
 	doTranspose = false;
 	for ii = 1:ndips
 		(mr,XT,XTT) = rotateAndMove3D(m,theta_phi[ii,:],(b[ii,:]./Mesh.h),doTranspose,mr,XT,XTT);
-		# (mr,XT,XTT) = rotateAndMove3D(m,theta_phi[ii,:],(b[ii,:]./Mesh.h));
 		d[:,ii] = sampleSlices(mr,prod(Mesh.h),samplingBinning);
 	end
  #-----------Compare MATBased and MATFree
