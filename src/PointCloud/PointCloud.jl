@@ -19,27 +19,25 @@ import jInv.ForwardShare.ForwardProbType
 
 export PointCloudParam, getPointCloudParam
 mutable struct PointCloudParam <: ForwardProbType
-    Mesh      				:: RegularMesh
-	P						:: Array{Array{Int64,1}}
-	Normals					:: Array{Float64,2}
+	P						:: Array{Float64,2}
+	Normals					:: Array{Float64,1}
 	npcAll					:: Int64
 	margin					:: Float64
 	workerSubIdxs			
     theta_phi_rad			:: Array{Float64,2}
 	b						:: Array{Float64,2}
-	samplingBinning			:: Int64
 	method					:: String
 	Jacobian				:: SparseMatrixCSC{Float32,Int32}
 	#S						:: SparseMatrixCSC{Float32,Int32}
 end
 
 
-function getPointCloudParamInternal(Mesh::RegularMesh, P:: Array{Array{Int64,1}}, Normals::Array{Float64,2},npcAll::Int64,margin::Float64,workerSubIdxs,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},samplingBinning::Int64,method)
-	return PointCloudParam(Mesh, P:: Array{Array{Int64,1}}, Normals::Array{Float64,2}, npcAll, margin, workerSubIdxs, theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2}, samplingBinning, method,spzeros(Float32,Int32,0,0));
+function getPointCloudParamInternal( P:: Array{Float64,2}, Normals::Array{Float64,1},npcAll::Int64,margin::Float64,workerSubIdxs,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},method)
+	return PointCloudParam(P::Array{Float64,2}, Normals::Array{Float64,1}, npcAll, margin, workerSubIdxs, theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2}, method,spzeros(Float32,Int32,0,0));
 end
 
 
-function getPointCloudParam(Mesh::RegularMesh,P::Array{Array{Int64,1}}, Normals::Array{Float64,2}, margin::Float64,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},samplingBinning::Int64,numWorkers::Int64,method = MATBased)
+function getPointCloudParam(P::Array{Float64,2}, Normals::Array{Float64,1}, margin::Float64,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},numWorkers::Int64,method = MATBased)
 	## This function does use the parallel mechanism of jInv (i.e., returns a RemoteChannel), even if numWorkers=1.	
 	if numWorkers > nworkers()
 		numWorkers = nworkers();
@@ -54,7 +52,7 @@ function getPointCloudParam(Mesh::RegularMesh,P::Array{Array{Int64,1}}, Normals:
 	pFor   = Array{RemoteChannel}(undef,numWorkers);
 	i = 1; nextidx() = (idx=i; i+=1; idx)
 	idx=i;
-	ndips  = length(P);
+	ndips  = 1
 	# send out jobs
 	@sync begin
 		for w = ActualWorkers
@@ -65,8 +63,8 @@ function getPointCloudParam(Mesh::RegularMesh,P::Array{Array{Int64,1}}, Normals:
 						break
 					end
 					I_p = getIndicesOfKthWorker(numWorkers,idx,ndips);
-					tmp = initRemoteChannel(getPointCloudParamInternal,w, Mesh,P:: Array{Array{Int64,1}}, Normals::Array{Float64,2},ndips, margin ,I_p,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},samplingBinning,method);
-					pFor[1]  = initRemoteChannel(getPointCloudParamInternal,w, Mesh,P:: Array{Array{Int64,1}}, Normals::Array{Float64,2},ndips, margin,I_p,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},samplingBinning,method);
+					tmp = initRemoteChannel(getPointCloudParamInternal,w,P::Array{Float64,2}, Normals::Array{Float64,1},ndips, margin ,I_p,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},method);
+					pFor[1]  = initRemoteChannel(getPointCloudParamInternal,w,P::Array{Float64,2}, Normals::Array{Float64,1},ndips, margin,I_p,theta_phi_rad::Array{Float64,2} ,b::Array{Float64,2},method);
 					wait(pFor[1]);
 					
 				end

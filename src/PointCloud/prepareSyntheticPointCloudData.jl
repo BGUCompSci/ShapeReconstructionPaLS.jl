@@ -57,76 +57,54 @@ function ddx(n)
 	return sparse(I, J, V, n, n+1)
 end
 
-function prepareSyntheticPointCloudData(m,Minv::RegularMesh,npc::Int64,theta_phi_PC::Array{Float64,2} ,b::Array{Float64,2}, noiseTrans :: Float64, noiseAngle :: Float64 ,filename::String)
-n = Minv.n;
-m = m[:]
-eps = 1e-4;
 
-
-
-Af   = getFaceAverageMatrix(Minv)
-A1 = Af[:,1:Int(size(Af,2)/3)]; #println("A1 size:",size(A1))
-A2 = Af[:,Int(size(Af,2)/3)+1:2*Int(size(Af,2)/3)];
-A3 = Af[:,2*Int(size(Af,2)/3)+1:Int(size(Af,2))];
-	
-D1 = kron(sparse(1.0I, Minv.n[3], Minv.n[3]),kron(sparse(1.0I, Minv.n[2], Minv.n[2]),ddx(Minv.n[1])))
-D2 = kron(sparse(1.0I, Minv.n[3], Minv.n[3]),kron(ddx(Minv.n[2]),sparse(1.0I, Minv.n[1], Minv.n[1])))
-D3 = kron(ddx(Minv.n[3]),kron(sparse(1.0I, Minv.n[2], Minv.n[2]),sparse(1.0I, Minv.n[1], Minv.n[1])))
-
-nx = A1*(D1'*m);
-ny = A2*(D2'*m);
-nz = A3*(D3'*m);
-#Wf,J = normalize([nx;ny;nz]);
-#Wf = reshape(Wf,div(length(Wf),3),3);
-Wf = [nx ny nz];
-f2(A) = [norm(A[i,:]) for i=1:size(A,1)]
-
-
-ind = findall(x -> x > 0.7, f2(Wf));
-#ind = ind[randperm(length(ind))[1:round(Int,0.5*length(ind))]];
-
-subs = ind2subv(Minv.n,ind);
-subs = sort(subs,rev = true);
-ind = subv2ind(Minv.n,subs);
-Normals = Wf;
-
-margin = 0.2;
-Parray = Array{Array{Int64,1}}(undef,npc);
-global d = [];
-for i=1:npc
-	cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
-	ind = subv2ind(Minv.n,cursubs);
-	Parray[i] = Array{Int64}(ind);
-	I2 = collect(1:length(ind));
-	J2 = ind;
-	V2 = ones(size(ind));
-	P = sparse(I2,J2,V2,length(ind),length(m));
-	nxt = P*nx; nyt = P*ny; nzt = P*nz;
-	curnormals = [nxt; nyt; nzt];
-	d = [d;curnormals];
+function loc2cs3D(loc1::Union{Int64,Array{Int64}},loc2::Union{Int64,Array{Int64}},loc3::Union{Int64,Array{Int64}},n::Array{Int64,1})
+@inbounds cs = loc1 .+ (loc2.-1)*n[1] .+ (loc3.-1)*n[1]*n[2];
+return cs;
 end
 
+function prepareSyntheticPointCloudData(P,N,npc::Int64,theta_phi_PC::Array{Float64,2} ,b::Array{Float64,2}, noiseTrans :: Float64, noiseAngle :: Float64 ,filename::String)
+eps = 0.01171875*2.5 #0.0234375;
+println("size of p:",size(P));
+println("size of n:",size(N))
+subsForward = P + (eps .*N);
+subsBackwad = P - (eps .*N);
+subs = P;
+margin = 0.5;
+Parray = Array{Array{Float64}}(undef,npc);
+global d = [];
+for i=1:npc
+	#cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
+	#cursubsfwd = subsForward[round(Int,(i-1)*(1/npc - margin)*length(subsForward))+1:min(length(subsForward),round(Int,i*(1/npc + margin)*length(subsForward)))];
+	#cursubsbwd = subsBackwad[round(Int,(i-1)*(1/npc - margin)*length(subsBackwad))+1:min(length(subsBackwad),round(Int,i*(1/npc + margin)*length(subsBackwad)))];
+	cursubs = P;
+	println("size of cursubs:",size(cursubs))
+	cursubsfwd = subsForward;
+	cursubsbwd = subsBackwad;
+	P = [cursubsbwd; cursubs; cursubsfwd];
+	P = [cursubsbwd;cursubsfwd];
+	
+	println("size of P:",size(P))
+	Parray[i] = P;
+	vals = [ones(size(cursubsbwd,1));0.5.*ones(size(cursubs,1)); zeros(size(cursubsfwd,1))];
+	vals = [ones(size(cursubsbwd,1)); zeros(size(cursubsfwd,1))];
+	d = [d ;vals];
+end
 
-pFor = getPointCloudParam(Minv,Parray,Normals,margin,theta_phi_PC ,b,1,1,MATFree)
-Dremote,pFor = getData(m[:],pFor);
-
-Data = arrangeRemoteCallPCIntoLocalData(Dremote);
+d = Array{Float64,1}(d);
+println("size of d:",size(d))
 #Add noise:
 b = b + noiseTrans*randn(size(b,1),3)
 theta_phi_PC = theta_phi_PC +  noiseAngle*randn(size(theta_phi_PC));
 					
 file = matopen(string(filename,"_data.mat"), "w");
-write(file,"domain",Minv.domain);
-write(file,"n",Minv.n);
-write(file,"Data",Data);
+write(file,"Data",d);
 write(file,"P",Parray);
-write(file,"Normals",Normals);
+write(file,"Normals",d);
 write(file,"margin",margin);
 write(file,"b",b);
 write(file,"theta_phi_PC",theta_phi_PC)
 write(file,"npc",npc)
-# write(file,"m_true",m);
-#write(file,"pad",pad);
 close(file);
 return;
 end
@@ -135,8 +113,6 @@ end
 export readPointCloudDataFile
 function readPointCloudDataFile(filename::String)
 file = matopen(string(filename,"_data.mat"), "r");
-domain = read(file,"domain");
-n = read(file,"n");
 Data = read(file,"Data");
 P = read(file,"P");
 Normals = read(file,"Normals");
@@ -145,5 +121,5 @@ b = read(file,"b");
 theta_phi_PC = read(file,"theta_phi_PC");
 npc = read(file,"npc")
 close(file);
-return n,domain,Data,P,Normals,Margin,b,theta_phi_PC,npc;
+return Data,P,Normals,Margin,b,theta_phi_PC,npc;
 end
