@@ -13,7 +13,7 @@ before_install:
    - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 
 script:
-  - julia --check-bounds=yes --color=yes -e 'using Pkg; Pkg.test(coverage=true);'
+  - julia --check-bounds=yes --color=yes -e 'using Pkg; Pkg.test("ShapeReconstructionPaLS",coverage=true);'
 
 after_success:
   - julia -e 'using Pkg; cd(Pkg.dir("ShapeReconstructionPaLS")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
