@@ -52,12 +52,12 @@ if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Ba
 	else
 		numParamOfRBF = 5;
 	end
-	nRBF 				= div(length(m)- 5*pFor.npcAll,numParamOfRBF) ;
+	nRBF 				= div(length(m)- 5*pFor.npcAll,numParamOfRBF);
 	(m1,theta_phi,b) 	= splitRBFparamAndRotationsTranslations(m,nRBF,pFor.npcAll,numParamOfRBF);
 	theta_phi 			= theta_phi[pFor.workerSubIdxs,:];
 	b 					= b[pFor.workerSubIdxs,:];
 	mrot,Jrot 			= rotateAndMoveRBF(m1,Minv,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
-	d,JacT 				= getPCDataRBF(pFor, mrot,theta_phi,b,numParamOfRBF);
+	d,JacT 				= getPCDataRBF(pFor,mrot,theta_phi,b,numParamOfRBF);
 	nRBF 				= div(length(m),numParamOfRBF) ;
 	# multiply Jacobian with Jrot, and then take the transpose.
 
@@ -93,8 +93,6 @@ for i=1:npc
 	J1 = getSparseMatrixTransposed(JBuilder);
 	#dcurr = P'*u;
 	dcurr = u;
-	println("size u:",size(u))
-	println("size P:",size(P))
 	d[count:(count + size(P,1) - 1)] = dcurr;
 	count = count + size(P,1);
 	Jacobians[i] = (J1);

@@ -24,7 +24,7 @@ plotting = false;
 
 if plotting
 	using PyPlot;
-	using jInvVis;
+	using jInvVisPyPlot
 	close("all");
 end
 
@@ -43,7 +43,7 @@ n_tup = tuple(n_tup...)
 ################################################
 
 model = "fandisksmall";
-file = open(string(pwd(),"/models/",model,".xyz"));
+file = open(string(pwd(),"/../models/",model,".xyz"));
 
 #file = open("pc_full.xyz")
 A = readlines(file);
@@ -81,9 +81,9 @@ A = []; tmp = [];
 linIdx = [];
 
 
-noiseAnglesDeg = 0.0;
+noiseAnglesDeg = 1;
 #original was mean(2*Mesh.h);
-noiseTrans = 0.0;
+noiseTrans = 0.015;
 noiseAngles = deg2rad(noiseAnglesDeg);
 #########################################################################################################
 ### Dipping Data ########################################################################################
@@ -98,24 +98,24 @@ println("nworkers=",nWorkers)
 misfun = PCFun; ## least squares
 
 	dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
-	b = [0.0 0 0 ; 0.0 0 0 ]
+	trans = [0.0 0 0 ; 0.0 0 0 ]
 	theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
 	noiseTrans = 0.0;
 	noiseAngles = deg2rad(0.0);
 	npc = 2;
-	prepareSyntheticPointCloudData(PC,Normals,npc,theta_phi_dip,b,noiseTrans,noiseAngles,dipDataFilename);
+	prepareSyntheticPointCloudData(PC,mesh,npc,theta_phi_dip,trans,noiseTrans,noiseAngles,dipDataFilename);
 
 	#########################################################################################################
 	### Read the dipping data ###############################################################################
 	#########################################################################################################
-	Data,P,Normals,Margin,b,theta_phi_dip,npc = readPointCloudDataFile(dipDataFilename);
+	Data,P,Normals,trans,theta_phi_dip,npc = readPointCloudDataFile(dipDataFilename);
 	### Set up the dip inversion
 	P =  Array{Array{Float64,2}}(P);
 	Normals = Array{Array{Float64,2}}(Normals);
-	pForDip = getPointCloudParam(P,Normals,Margin,theta_phi_dip,b,nWorkers,method);
+	pForDip = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,nWorkers,method);
 	ndips = npc;
 	if(locateRBFwithGrads)
-		pForDip_MATFree = getPointCloudParam(P,Normals,Margin,theta_phi_dip,b,nWorkers,MATFree);
+		pForDip_MATFree = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,nWorkers,MATFree);
 	end
 	
 	### Create Dip param if we use the GRAD of MATFREE to locate new RBFs
@@ -145,7 +145,7 @@ isRBF10 = 0;
 ###############################################################################################
 
 
-	nRBF = 20;
+	nRBF = 2;
 	isRBF10 = (method == RBF10BasedSimple1 || method==RBF10BasedSimple2 || method==RBF10Based);
 	isSimple = (method==RBFBasedSimple1 || method==RBF10BasedSimple1 || method==RBFBasedSimple2 || method==RBF10BasedSimple2);
 
@@ -172,22 +172,25 @@ isRBF10 = 0;
 	sback = zero(Float32);
 	a = -100000000.0;
 	b = 10000000.0;
-	boundsHigh = zeros(Float32,n_m_simple) .+ b;
-	boundsLow = zeros(Float32,n_m_simple) .+ a;
+	boundsHigh = zeros(Float32,nAll) .+ b;
+	# boundsHigh[end-5*npc+1:end] .= 0.01;
+	
+	boundsLow = zeros(Float32,nAll) .+ a;
+	# boundsLow[end-5*npc+1:end] .= -0.01;
 	# m0 - initial guess. mref - reference for regularization.
-	mref = zeros(Float32,n_m_simple);
+	mref = zeros(Float32,nAll);
 	m0   = zeros(Float64,n_m_simple);
-	mref[1:numParamOfRBF:n_m_simple] = ParamLevelSet.centerHeavySide*2.0*rand(nRBF);
+	mref[1:numParamOfRBF:n_m_simple] .= ParamLevelSet.centerHeavySide*2.0;
 	if isRBF10
 		# here we initialize B as an identity matrix
-		mref[2:10:n_m_simple] .= 10.0;
-		mref[5:10:n_m_simple] .= 10.0;
-		mref[7:10:n_m_simple] .= 10.0;
+		mref[2:10:n_m_simple] .= 15.0;
+		mref[5:10:n_m_simple] .= 15.0;
+		mref[7:10:n_m_simple] .= 15.0;
 		boundsLow[2:10:n_m_simple] .= 0.05;
 		boundsLow[5:10:n_m_simple] .= 0.05;
 		boundsLow[7:10:n_m_simple] .= 0.05;
-		#boundsLow[end-10:end] .= -0.01
-		#boundsHigh[end-10:end] .= 0.01;
+		#boundsLow[end-9:end] .= -0.01
+		#boundsHigh[end-9:end] .= 0.01;
 	else
 		mref[2:5:n_m_simple] .= 4.0;
 		boundsLow[2:5:n_m_simple] .= 0.05;
@@ -197,17 +200,20 @@ isRBF10 = 0;
 	mref[numParamOfRBF:numParamOfRBF:n_m_simple] .= 0.75;
 	m0[:] .= mref[1:n_m_simple];
 	
-	
+	if !isSimple
+		m0 = wrapRBFparamAndRotationsTranslations(m0,theta_phi_dip,trans);
+	end
 	mref[:] = m0;
+	mref[end-5*npc+1:end].=0.0;
 	m0[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .+= 0.1*randn(nRBF);
 	m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.1*randn(nRBF);
 	m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.1*randn(nRBF);
 	
 	
 
-	alpha = 5e+1;
+	alpha = 5e-4;
 
-	II = (sparse(1.0I, n_m_simple,n_m_simple));
+	II = (sparse(1.0I, nAll,nAll));
 	regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);
 	HesPrec = getEmptyRegularizationPreconditioner();
 
@@ -223,7 +229,7 @@ pMisRFs = getMisfitParam(pForDip, Wd_Dip, dobsDirect, misfun, Iact,sback);
 
 
 
-cgit  = 50; # not used.
+cgit  = 100; # not used.
 maxit = 10;
 pcgTol = 1e-2; #not used
 
@@ -236,38 +242,36 @@ function myDump(mc::Vector,Dc,iter,pInv,pMis,method="",ndips=0,noiseAngle=0,nois
 		# Temp = string(Temp[1],"_GN",iter,Temp[2]);
 
 			#ntup = tuple((pInv.MInv.n)...);
-			ntup = tuple(n...)
-			fullMc = plotFun(mc)[1];
-			println("size of fullmc:",size(fullMc))
-				writedlm(string("FandiskDirectParams_iter_",iter,".dat"),convert(Array{Float64},mc));
-				writedlm(string("FandiskDirectVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
+		ntup = tuple(n...)
+		fullMc = plotFun(mc)[1];
+		#println("size of fullmc:",size(fullMc))
+		writedlm(string("FandiskDirectParams_iter_",iter,".dat"),convert(Array{Float64},mc));
+		writedlm(string("FandiskDirectVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
 		if plotting
-			fullMc = reshape(IactPlot*fullMc[:],ntup);
-			# fullMc = reshape(fullMc[:],ntup);
+			fullMc = reshape(convert(Array{Float32},fullMc[:]),ntup);
 			close(888);
-			figure(888);
-			plotModel(fullMc,true,pInv.MInv);
-			sleep(1.0);
-			
-				savefig(string("FandiskDirectIt",iter,"_",ntup,".png"));
-				writedlm(string("FandiskDirectParams_iter_",iter,".dat"),convert(Array{Float64},mc));
-				writedlm(string("FandiskDirectVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
+			figure(888); 
+			plotModel(fullMc,includeMeshInfo = true,M_regular = pInv.MInv);
+			savefig(string("FandiskDirectIt",iter,"_",ntup,".png"));
+			sleep(0.5);
+			# writedlm(string("FandiskDirectParams_iter_",iter,".dat"),convert(Array{Float64},mc));
+			# writedlm(string("FandiskDirectVolume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
 
 		end
 	# end
 end
-pInv = getInverseParam(mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
-                     maxStep = 1e-1,pcgMaxIter=cgit,pcgTol=pcgTol,
+pInv = getInverseParam(mesh,modfun,regfun,alpha,mref,copy(boundsLow),copy(boundsHigh),
+                     maxStep = 2e-1,pcgMaxIter=cgit,pcgTol=pcgTol,
 					 minUpdate = 0.01, maxIter = maxit,HesPrec=HesPrec);
 
 # end
 
 #### Projected Gauss Newton
 mc = m0;
-pInv.maxIter = 10;
+pInv.maxIter = 100;
 Dc = nothing;
 mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
-mc[end-5*npc:end] .= 0.0;
+#mc[end-5*npc+1:end] .= 0.0;
 print("DC shape:",size(Dc))
 
 pInv.maxIter = 50;
@@ -285,7 +289,7 @@ if !(method == MATBased || method == MATFree)
 	new_RBF_location = [];
 	@sync for iterNum=2:outerIter
 		println("Inversion using ", nRBF," basis functions")
-		new_nRBF = 10;
+		new_nRBF = 5;
 		if (times > 100)
 		  #times=0;
 		  new_nRBF = 0;
@@ -294,31 +298,29 @@ if !(method == MATBased || method == MATFree)
 
 		# Dc - the data using our method.
 		global Dc = Dc;
-		u = modfunForPlotting(mc)[1];
-		#Ii = findall(x -> x >0.2 && x<0.5,u);
+		
 		#Lets compute the gradient of the misfit function:
-		locateRBFwithGrads = false;
+		locateRBFwithGrads = true;
+		print(mc[end-5*npc+1:end])
 		if(locateRBFwithGrads)
 			#(m11,theta_phi1,b1) 	= splitRBFparamAndRotationsTranslations(mc,nRBF,ndips,numParamOfRBF)
 			#updateAngles(pForDip_MATFree,theta_phi1);
 			pMis_Free = getMisfitParam(pForDip_MATFree, Wd_Dip, dobsDirect, misfun, Iact,sback);
 			sigmaH = getDefaultHeaviside();
-			u,JBuilder = MeshFreeParamLevelSetModelFunc(mesh,mc,Xc = P[1],computeJacobian = 0,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
-			computeMisfit(u,pMis_Free);
-			gradMis = computeGradMisfit(u,Dc,pMis_Free)
-			gradMis = gradMis.^2;
-			println("gradMis size:",size(gradMis))
+			allPoints = [P[1] ; P[2]];
+			Dd, = computeMisfit(mc,pMisRFs);		
+			gradMis = (fetch(Dd[1])-Data).^2;	
 			sp = sortperm(gradMis,rev = true);
+			sp = sp[1:round(Int64,length(sp)/4.0)];
+			sp = sp[randperm(length(sp))];
 			idxs = sp[1:new_nRBF];
-			bwdSubs = P[1];
-			println("all P size:",size(P[1]))
-			Ii = bwdSubs[idxs,:]
-			#bwdSubs = bwdSubs[round(Int64,0*size(bwdSubs,1)/2)+1:round(Int64,1*size(bwdSubs,1)/2),:];
-			#Ii = bwdSubs;
-			#Ii = Ii[randperm(size(Ii,1))[1:new_nRBF],:];
-			println("Ii size after randperm:",size(Ii));
+			bwdSubs = [P[1] ; P[2]];
+			println("all P size:",size(allPoints));
+			Ii = allPoints[idxs,:];
 		else
-			Ii = findall(x -> x >0.2 && x<0.5,u);
+			u = modfunForPlotting(mc)[1];
+			#Ii = findall(x -> x >0.2 && x<0.5,u);
+			Ii = findall(x -> x >0.4 && x<0.8,u);
 		end
 		
 		
@@ -332,28 +334,28 @@ if !(method == MATBased || method == MATFree)
     #  Ii = findall(x -> x .>0.2 && x.<0.5,u);
     #  Ii = Ii[randperm(length(Ii))[1:new_nRBF]];
     #end
-    		println("length of I",size(Ii));
-		 global new_RBF_location = append!(new_RBF_location,Ii);
+    	# println("length of I",size(Ii));
+		global new_RBF_location = append!(new_RBF_location,Ii);
     
 		if(locateRBFwithGrads)
-			println("Added rbfs at locations:",Ii);
+			# println("Added rbfs at locations:",Ii);
 			X1 = Ii[:,1]; X2 = Ii[:,2]; X3 = Ii[:,3];
 		else
-		println("ii:",Ii)
-		println(ind2subv(n_tup,Ii))
-		indices = getindex.(ind2subv(n_tup,Ii),[1 2 3 ]);
-		println(indices)
-		
-		
-		I1 = indices[:,1];
-		I2 = indices[:,2];
-		I3 = indices[:,3];
-		
-		X1 = I1*mesh.h[1] .- 0.5*mesh.h[1] .+ mesh.domain[1];
-		X2 = I2*mesh.h[2] .- 0.5*mesh.h[2] .+ mesh.domain[3];
-		X3 = I3*mesh.h[3] .- 0.5*mesh.h[3] .+ mesh.domain[5];
+			println("ii:",Ii)
+			println(ind2subv(n_tup,Ii))
+			indices = getindex.(ind2subv(n_tup,Ii),[1 2 3 ]);
+			println(indices)
+			
+			
+			I1 = indices[:,1];
+			I2 = indices[:,2];
+			I3 = indices[:,3];
+			
+			X1 = I1*mesh.h[1] .- 0.5*mesh.h[1] .+ mesh.domain[1];
+			X2 = I2*mesh.h[2] .- 0.5*mesh.h[2] .+ mesh.domain[3];
+			X3 = I3*mesh.h[3] .- 0.5*mesh.h[3] .+ mesh.domain[5];
 		end
-		println("X1:",X1);println("X2:",X2);println("X3:",X3);
+		# println("X1:",X1);println("X2:",X2);println("X3:",X3);
     
     
 		n_mc_old = numParamOfRBF*nRBF;
@@ -376,9 +378,11 @@ if !(method == MATBased || method == MATFree)
 		mc_new[(n_mc_old+numParamOfRBF-1):numParamOfRBF:n_mc_new] = X2;
 		mc_new[(n_mc_old+numParamOfRBF):numParamOfRBF:n_mc_new] = X3;
 
-		pInv.boundsHigh = zeros(Float32,length(mc_new)) .+ b;
-		boundsLow = zeros(Float32,length(mc_new)) .+ a;
+		boundsLow = zeros(Float32,length(mc_new)).+a;
+		boundsHigh = zeros(Float32,length(mc_new)).+b;
 		boundsLow[1:n_mc_old] = pInv.boundsLow[1:n_mc_old];
+		boundsHigh[1:n_mc_old] = pInv.boundsHigh[1:n_mc_old];
+		
 		eeps =  1/(0.01171875*2.5)
 		if isRBF10
 			mc_new[(n_mc_old+2):10:n_mc_new] .= eeps #10.0;
@@ -387,22 +391,22 @@ if !(method == MATBased || method == MATFree)
 			boundsLow[(n_mc_old+2):10:n_mc_new] .= 0.05;
 			boundsLow[(n_mc_old+5):10:n_mc_new] .= 0.05;
 			boundsLow[(n_mc_old+7):10:n_mc_new] .= 0.05;
-			#boundsLow[end-10:end] .= 0.0;
-			#boundsHigh[end-10:end] .= 0.0;
 		else
 			mc_new[(n_mc_old+2):5:n_mc_new] .= 6.0;
 			boundsLow[(n_mc_old+2):5:n_mc_new] .= 0.05;
 		end
+		# boundsLow[end-9:end] .= -0.01;
+		# boundsHigh[end-9:end] .= 0.01;
 		pInv.boundsLow = boundsLow;
+		pInv.boundsHigh = boundsHigh;
 		mref_new[1:n_mc_new] = mc_new[1:n_mc_new];
-
+		mref_new[end-5*npc+1:end].=0.0;
 		global mc = mc_new;
 		global nRBF += new_nRBF;
 
 
 		#II = speye(Float32,length(mc_new));
 		len = Int64(length(mc_new));
-		println(typeof(len))
 		IIs = sparse(1.0I,len,len);
 		pInv.regularizer = (m, mref, M)->TikhonovReg(m,mref,M,IIs);
 		
@@ -417,7 +421,7 @@ if !(method == MATBased || method == MATFree)
 		end
 		
 		mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
-		mc[end-5*npc:end] .= 0.0;
+		#mc[end-5*npc+1:end] .= 0.0;
 		myDump(mc,0,iterNum,pInv,0,methodName,0,noiseAnglesDeg,noiseTrans,invertVis);
 		
 		if iterNum==outerIter

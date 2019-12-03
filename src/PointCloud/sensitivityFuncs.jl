@@ -8,15 +8,15 @@ export getSensMatVec
 function getSensMatVec(v::Vector,m::Vector,pFor::PointCloudParam)
 	println("Im in getSensMatVec")
 	S = pFor.Jacobian;
-	
 	d = S'*v[:];
-
 end
 
 export getSensTMatVec
 function getSensTMatVec(v::Vector,m::Vector,pFor::PointCloudParam)
 	JtV = 0;
 	S = pFor.Jacobian;
+	# println("Jac size:",size(S));
+	# println("v size:",size(v));
 	JtV = S'*v[:];
-return JtV;
+	return JtV;
 end

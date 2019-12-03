@@ -28,7 +28,6 @@ mutable struct PointCloudParam <: ForwardProbType
 	b						:: Array{Float64,2}
 	method					:: String
 	Jacobian				:: SparseMatrixCSC{Float32,Int32}
-	#S						:: SparseMatrixCSC{Float32,Int32}
 end
 
 
@@ -42,13 +41,11 @@ function getPointCloudParam(P::Array{Array{Float64,2}}, Normals::Array{Array{Flo
 	if numWorkers > nworkers()
 		numWorkers = nworkers();
 	end
-	#SourcesSubInd = Array{Array{Int64,1}}(numWorkers);
-	SourcesSubInd = Array{Array{Int64}}(undef,numWorkers);
+	SourcesSubInd = Array{Array{Int64,1}}(undef,numWorkers);
 	ActualWorkers = workers();
 	if numWorkers < nworkers()
 		ActualWorkers = ActualWorkers[1:numWorkers];
 	end
-	#pFor   = Array{RemoteChannel}(numWorkers)
 	pFor   = Array{RemoteChannel}(undef,numWorkers);
 	i = 1; nextidx() = (idx=i; i+=1; idx)
 	idx=i;
@@ -81,8 +78,6 @@ function clear!(pFor::PointCloudParam)
 	return pFor;
 end
 
-
-#include("generateDipMatrix.jl");
 include("prepareSyntheticPointCloudData.jl");
 include("getData.jl");
 include("sensitivityFuncs.jl");
