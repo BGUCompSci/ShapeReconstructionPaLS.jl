@@ -3,6 +3,8 @@ import LinearAlgebra
 using LinearAlgebra
 using SparseArrays
 using Random
+import StatsBase
+using StatsBase
 
 using jInv
 export prepareSyntheticPointCloudData
@@ -51,13 +53,6 @@ function ind2subv(shape, indices)
 end
 
 
-function ddx(n)
-# D = ddx(n), 1D derivative operator
-	I,J,V = SparseArrays.spdiagm_internal(0 => fill(-1.0,n), 1 => fill(1.0,n)) 
-	return sparse(I, J, V, n, n+1)
-end
-
-
 function loc2cs3D(loc1::Union{Int64,Array{Int64}},loc2::Union{Int64,Array{Int64}},loc3::Union{Int64,Array{Int64}},n::Array{Int64,1})
 @inbounds cs = loc1 .+ (loc2.-1)*n[1] .+ (loc3.-1)*n[1]*n[2];
 return cs;
@@ -67,27 +62,33 @@ function prepareSyntheticPointCloudData(P,N,npc::Int64,theta_phi_PC::Array{Float
 eps = 0.01171875*2.5 #0.0234375;
 println("size of p:",size(P));
 println("size of n:",size(N))
-subsForward = P + (eps .*N);
-subsBackwad = P - (eps .*N);
 subs = P;
-margin = 0.5;
+margin = 0.2;
 Parray = Array{Array{Float64}}(undef,npc);
+Normals = Array{Array{Float64}}(undef,npc);
 global d = [];
 for i=1:npc
-	#cursubs = subs[round(Int,(i-1)*(1/npc - margin)*length(subs))+1:min(length(subs),round(Int,i*(1/npc + margin)*length(subs)))];
-	#cursubsfwd = subsForward[round(Int,(i-1)*(1/npc - margin)*length(subsForward))+1:min(length(subsForward),round(Int,i*(1/npc + margin)*length(subsForward)))];
-	#cursubsbwd = subsBackwad[round(Int,(i-1)*(1/npc - margin)*length(subsBackwad))+1:min(length(subsBackwad),round(Int,i*(1/npc + margin)*length(subsBackwad)))];
-	cursubs = P;
+	if(i  == 1)
+	s = 0; e = 1;
+	else
+	s=1; e = 0;
+	end
+	sampledPointIndices = sample(collect(1:size(P,1)),  Weights(collect(LinRange(s,e,round(Int64,size(P,1)))))  , round(Int64,size(P,1)/2),replace=false )
+	println("sampledPointIndices:",sampledPointIndices)
+	P_curr = P[sampledPointIndices,:];
+	Normals[i] = P_curr[:,4:6];
+	cursubs = P_curr[:,1:3];
+	writedlm(string("PC",i,".txt"),cursubs);
 	println("size of cursubs:",size(cursubs))
-	cursubsfwd = subsForward;
-	cursubsbwd = subsBackwad;
-	P = [cursubsbwd; cursubs; cursubsfwd];
-	P = [cursubsbwd;cursubsfwd];
+	subsForward = cursubs + (eps .*Normals[i]);
+	subsBackward = cursubs - (eps .*Normals[i]);
+	curr_points = [subsBackward; cursubs; subsForward];
+	#P = [cursubsbwd;cursubsfwd];
 	
-	println("size of P:",size(P))
-	Parray[i] = P;
-	vals = [ones(size(cursubsbwd,1));0.5.*ones(size(cursubs,1)); zeros(size(cursubsfwd,1))];
-	vals = [ones(size(cursubsbwd,1)); zeros(size(cursubsfwd,1))];
+	println("size of P:",size(curr_points))
+	Parray[i] = curr_points;
+	vals = [ones(size(subsBackward,1));0.5.*ones(size(cursubs,1)); zeros(size(subsForward,1))];
+	#vals = [ones(size(cursubsbwd,1)); zeros(size(cursubsfwd,1))];
 	d = [d ;vals];
 end
 
@@ -100,7 +101,7 @@ theta_phi_PC = theta_phi_PC +  noiseAngle*randn(size(theta_phi_PC));
 file = matopen(string(filename,"_data.mat"), "w");
 write(file,"Data",d);
 write(file,"P",Parray);
-write(file,"Normals",d);
+write(file,"Normals",Normals);
 write(file,"margin",margin);
 write(file,"b",b);
 write(file,"theta_phi_PC",theta_phi_PC)

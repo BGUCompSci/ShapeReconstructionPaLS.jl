@@ -12,6 +12,7 @@ using Statistics
 using Distributed
 using SparseArrays
 using Random
+
 ENV["MPLBACKEND"] = "Qt4Agg"
 
 function ind2subv(shape, indices)
@@ -31,9 +32,9 @@ end
 invertDip = true;
 invertVis = false;
 
-locateRBFwithGrads = false;
+locateRBFwithGrads = true;
 n = [128,128,128];
-mesh = getRegularMesh([0.0 1.5 0.5 1.5 0.5 1.5],n);
+mesh = getRegularMesh([0.0 1.5 0.0 1.5 0.0 1.5],n);
 n_tup = collect(n);
 n_tup = tuple(n_tup...)
 
@@ -41,7 +42,7 @@ n_tup = tuple(n_tup...)
 ### Reading the model and pad ##################
 ################################################
 
- model = "fandiskpc";
+model = "fandisksmall";
 file = open(string(pwd(),"/models/",model,".xyz"));
 
 #file = open("pc_full.xyz")
@@ -54,21 +55,20 @@ for i = 1:1:size(A,1)
 	 global N[i] = parse.(Float64,A[i])[4:6];
 end
 close(file);
-A= Array{Float64,2}(transpose(hcat(B...)));
+A = Array{Float64,2}(transpose(hcat(B...)));
 Normals = Array{Float64,2}(transpose(hcat(N...)));
-println("first line of xyz:",A[1,:]);
-println("first line of normals:",Normals[1,:]);
+
+
+##Sort the PC:
+PC  = [ A Normals];
+PC = PC[sortperm(PC[:, 1]), :];
+writedlm("SortedPC.txt",PC);
+println("PC:",size(PC)," ", PC[end,:])
+
+
 npc = size(A,1); #Number of points in point cloud
-println("A size:",size(A)); println("Normals size:",size(Normals));
 B = [];
 
-
-#tmp = [tuple(vec(A[i, :])...) for i in 1:size(A, 1)];
-#indices = CartesianIndex.(tmp);
-#linIdx = LinearIndices(tuple(n...))
-#indices = linIdx[indices];
-#Create indices matrix P:
-#P should be k \times n where k = |Point cloud| , n = #vertices on grid
 P = A;
 println("Size of P:",size(P));
 
@@ -98,19 +98,21 @@ println("nworkers=",nWorkers)
 misfun = PCFun; ## least squares
 
 	dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
-	b = [0.0 0 0] #; 0.0 0 0 ]
-	theta_phi_dip = [0.0 0.0] #; 0.0 0.0];
+	b = [0.0 0 0 ; 0.0 0 0 ]
+	theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
 	noiseTrans = 0.0;
 	noiseAngles = deg2rad(0.0);
-	npc = 1;
-	prepareSyntheticPointCloudData(P,Normals,npc,theta_phi_dip,b,noiseTrans,noiseAngles,dipDataFilename);
+	npc = 2;
+	prepareSyntheticPointCloudData(PC,Normals,npc,theta_phi_dip,b,noiseTrans,noiseAngles,dipDataFilename);
 
 	#########################################################################################################
 	### Read the dipping data ###############################################################################
 	#########################################################################################################
 	Data,P,Normals,Margin,b,theta_phi_dip,npc = readPointCloudDataFile(dipDataFilename);
 	### Set up the dip inversion
-	pForDip = getPointCloudParam(P[1],Normals,Margin,theta_phi_dip,b,nWorkers,method);
+	P =  Array{Array{Float64,2}}(P);
+	Normals = Array{Array{Float64,2}}(Normals);
+	pForDip = getPointCloudParam(P,Normals,Margin,theta_phi_dip,b,nWorkers,method);
 	ndips = npc;
 	if(locateRBFwithGrads)
 		pForDip_MATFree = getPointCloudParam(P,Normals,Margin,theta_phi_dip,b,nWorkers,MATFree);
@@ -143,7 +145,7 @@ isRBF10 = 0;
 ###############################################################################################
 
 
-	nRBF = 2;
+	nRBF = 20;
 	isRBF10 = (method == RBF10BasedSimple1 || method==RBF10BasedSimple2 || method==RBF10Based);
 	isSimple = (method==RBFBasedSimple1 || method==RBF10BasedSimple1 || method==RBFBasedSimple2 || method==RBF10BasedSimple2);
 
@@ -178,12 +180,14 @@ isRBF10 = 0;
 	mref[1:numParamOfRBF:n_m_simple] = ParamLevelSet.centerHeavySide*2.0*rand(nRBF);
 	if isRBF10
 		# here we initialize B as an identity matrix
-		mref[2:10:n_m_simple] .= 1.0;
-		mref[5:10:n_m_simple] .= 1.0;
-		mref[7:10:n_m_simple] .= 1.0;
+		mref[2:10:n_m_simple] .= 10.0;
+		mref[5:10:n_m_simple] .= 10.0;
+		mref[7:10:n_m_simple] .= 10.0;
 		boundsLow[2:10:n_m_simple] .= 0.05;
 		boundsLow[5:10:n_m_simple] .= 0.05;
 		boundsLow[7:10:n_m_simple] .= 0.05;
+		#boundsLow[end-10:end] .= -0.01
+		#boundsHigh[end-10:end] .= 0.01;
 	else
 		mref[2:5:n_m_simple] .= 4.0;
 		boundsLow[2:5:n_m_simple] .= 0.05;
@@ -263,10 +267,10 @@ mc = m0;
 pInv.maxIter = 10;
 Dc = nothing;
 mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
-
+mc[end-5*npc:end] .= 0.0;
 print("DC shape:",size(Dc))
 
-pInv.maxIter = 200;
+pInv.maxIter = 50;
 myDump(mc,0,1,pInv,0,"",0,noiseAnglesDeg,noiseTrans,invertVis);
 
 
@@ -276,7 +280,7 @@ times=0;
 
 
 if !(method == MATBased || method == MATFree)
-	outerIter = 40;
+	outerIter = 80;
 	grad_u = nothing;
 	new_RBF_location = [];
 	@sync for iterNum=2:outerIter
@@ -291,30 +295,30 @@ if !(method == MATBased || method == MATFree)
 		# Dc - the data using our method.
 		global Dc = Dc;
 		u = modfunForPlotting(mc)[1];
-		#I = find((u.>0.3) .& (u.<0.6));
 		#Ii = findall(x -> x >0.2 && x<0.5,u);
 		#Lets compute the gradient of the misfit function:
-		locateRBFwithGrads = true;
+		locateRBFwithGrads = false;
 		if(locateRBFwithGrads)
 			#(m11,theta_phi1,b1) 	= splitRBFparamAndRotationsTranslations(mc,nRBF,ndips,numParamOfRBF)
 			#updateAngles(pForDip_MATFree,theta_phi1);
-			pMis_Free = getMisfitParam(pForDip, Wd_Dip, dobsDirect, misfun, Iact,sback);
-			#computeMisfit(mc,pMisRFs);
-			#gradMis = computeGradMisfit(mc,Dc,pMisRFs)
-			#gradMis = gradMis.^2;
-			# println("gradMis size:",size(gradMis))
-			# println("size gradmis:",size(gradMis))
-			# amax = argmax(gradMis); vmax = maximum(gradMis);
-			# sp = sortperm(gradMis,rev = true);
-			# Ii = sp[1:new_nRBF];
+			pMis_Free = getMisfitParam(pForDip_MATFree, Wd_Dip, dobsDirect, misfun, Iact,sback);
+			sigmaH = getDefaultHeaviside();
+			u,JBuilder = MeshFreeParamLevelSetModelFunc(mesh,mc,Xc = P[1],computeJacobian = 0,sigma = sigmaH,bf = 1,numParamOfRBF = numParamOfRBF);
+			computeMisfit(u,pMis_Free);
+			gradMis = computeGradMisfit(u,Dc,pMis_Free)
+			gradMis = gradMis.^2;
+			println("gradMis size:",size(gradMis))
+			sp = sortperm(gradMis,rev = true);
+			idxs = sp[1:new_nRBF];
 			bwdSubs = P[1];
 			println("all P size:",size(P[1]))
-			bwdSubs = bwdSubs[round(Int64,0*size(bwdSubs,1)/2)+1:round(Int64,1*size(bwdSubs,1)/2),:];
-			
-			
-			Ii = bwdSubs;
-			Ii = Ii[randperm(size(Ii,1))[1:new_nRBF],:];
+			Ii = bwdSubs[idxs,:]
+			#bwdSubs = bwdSubs[round(Int64,0*size(bwdSubs,1)/2)+1:round(Int64,1*size(bwdSubs,1)/2),:];
+			#Ii = bwdSubs;
+			#Ii = Ii[randperm(size(Ii,1))[1:new_nRBF],:];
 			println("Ii size after randperm:",size(Ii));
+		else
+			Ii = findall(x -> x >0.2 && x<0.5,u);
 		end
 		
 		
@@ -375,13 +379,16 @@ if !(method == MATBased || method == MATFree)
 		pInv.boundsHigh = zeros(Float32,length(mc_new)) .+ b;
 		boundsLow = zeros(Float32,length(mc_new)) .+ a;
 		boundsLow[1:n_mc_old] = pInv.boundsLow[1:n_mc_old];
+		eeps =  1/(0.01171875*2.5)
 		if isRBF10
-			mc_new[(n_mc_old+2):10:n_mc_new] .= 10.0;
-			mc_new[(n_mc_old+5):10:n_mc_new] .= 10.0;
-			mc_new[(n_mc_old+7):10:n_mc_new] .= 10.0;
+			mc_new[(n_mc_old+2):10:n_mc_new] .= eeps #10.0;
+			mc_new[(n_mc_old+5):10:n_mc_new] .= eeps#10.0;
+			mc_new[(n_mc_old+7):10:n_mc_new] .= eeps#10.0;
 			boundsLow[(n_mc_old+2):10:n_mc_new] .= 0.05;
 			boundsLow[(n_mc_old+5):10:n_mc_new] .= 0.05;
 			boundsLow[(n_mc_old+7):10:n_mc_new] .= 0.05;
+			#boundsLow[end-10:end] .= 0.0;
+			#boundsHigh[end-10:end] .= 0.0;
 		else
 			mc_new[(n_mc_old+2):5:n_mc_new] .= 6.0;
 			boundsLow[(n_mc_old+2):5:n_mc_new] .= 0.05;
@@ -410,6 +417,7 @@ if !(method == MATBased || method == MATFree)
 		end
 		
 		mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
+		mc[end-5*npc:end] .= 0.0;
 		myDump(mc,0,iterNum,pInv,0,methodName,0,noiseAnglesDeg,noiseTrans,invertVis);
 		
 		if iterNum==outerIter
