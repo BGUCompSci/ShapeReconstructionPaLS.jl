@@ -28,6 +28,3 @@ ShapeReconstructionPaLS consists of three submodules:
 
 Some examples can be found in the `driver` folder. See the results section in https://arxiv.org/abs/1904.10379.
 
-# Acknowledgements
-
-
