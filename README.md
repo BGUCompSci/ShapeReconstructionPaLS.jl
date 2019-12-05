@@ -4,6 +4,12 @@
 # ShapeReconstructionPaLS
 This is a flexible framework for multimodal 3D shape reconstruction using parametric level set methods. 
 
+The package is based on the following paper (please cite if you are using the package):
+
+Moshe Eliasof, Andrei Sharf, and Eran Treister, Multi-modal 3D Shape Reconstruction Under Calibration Uncertainty using Parametric Level Set Methods, 2019. (https://arxiv.org/abs/1904.10379)
+
+
+
 This package relies on two other packages:
 1. [`jInv.jl`](https://github.com/JuliaInv/jInv.jl) - A juliA package to solve parameter estimation problems efficiently and in parallel  For more details see (http://arxiv.org/abs/1606.07399).
 2. [`ParamLevelSet.jl`](https://github.com/JuliaInv/ParamLevelSet.jl) - A julia package to implement parametric level set methods.
