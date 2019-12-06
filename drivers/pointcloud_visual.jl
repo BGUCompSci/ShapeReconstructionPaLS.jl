@@ -9,7 +9,7 @@ using ShapeReconstructionPaLS
 using ShapeReconstructionPaLS.PointCloud;
 using ParamLevelSet;
 using ShapeReconstructionPaLS.ShapeFromSilhouette;
-using ShapeReconstructionPaLS.Utils;
+@everywhere using ShapeReconstructionPaLS.Utils;
 using Statistics
 using Distributed
 using SparseArrays
@@ -27,11 +27,11 @@ end
 
 ####
 #Parameters to choose if: inversion with dip only/visual hull only/ joint inversion
-invertPC = true;
+invertPC = false;
 invertVis = true;
 
 #Place new added RBFs according to gradient values or randomly:
-locateRBFwithGrads = true;
+locateRBFwithGrads = false;
 n = [128,128,128];
 Mesh = getRegularMesh([0.0 3.0 0.0 3.0 0.0 3.0],n);
 
@@ -82,9 +82,9 @@ file = matopen(string(pwd(),"/models/",model,".mat"));
 
 A = read(file, "B");
 close(file);
-A = convert(Array{Float32,3},A[1:4:end,1:4:end,1:4:end]);
+A = convert(Array{Float32,3},A[1:8:end,1:8:end,1:8:end]);
 n_inner = collect(size(A));
-pad = ceil.(Int64,0.5*n_inner[1]);
+pad = ceil.(Int64,1.0*n_inner[1]);
 n = n_inner .+ 2*pad;
 
 Mesh = getRegularMesh([0.0 3.0 0.0 3.0 0.0 3.0],n);
@@ -118,13 +118,15 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
     samplingBinning = 1;
     npc = 0;
     nShots = 0;
+    noiseTrans = 0.0;
+    noiseAngles = deg2rad(0.0);
     if invertPC
         println("Data gen resolution:")
         println(n)
         dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
         trans = [0.0 0 0 ; 0.0 0 0 ]
         theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
-        noiseTrans = 0.0;
+        noiseTrans = 0.1;
         noiseAngles = deg2rad(0.0);
         npc = 2;
         prepareSyntheticPointCloudData(PC,Mesh,npc,theta_phi_dip,trans,noiseTrans,noiseAngles,dipDataFilename);
@@ -152,7 +154,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
         noiseSample = 0.0;
         factorShotsCreation = 4;
         theta_phi_vis = deg2rad.(convert(Array{Float64,2}, [rand(0:359,factorShotsCreation*nShots)  rand(0:90,factorShotsCreation*nShots)]));
-        theta_phi_vis = deg2rad.(convert(Array{Float64,2},[[30.0 60.0] ;[45.0 90.0]]))
+        
         
         
         
@@ -173,7 +175,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
         idsorted = sortperm(norms);
         theta_phi_vis = theta_phi_vis[idsorted[(end-nShots+1):end],:];
         DataVis = DataVis[:,idsorted[(end-nShots+1):end]];
-    end
+    
     ScreenMesh 	= getRegularMesh(ScreenDomain,div.(n_screen,samplingBinning));
     Mesh = getRegularMesh(domain,div.(n,samplingBinning));
     pad = div(pad,samplingBinning);
@@ -191,6 +193,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
             savefig(string("VisTrueModel.png"));
         end
     end
+    end
     
     samplingBinning = 1;
     println("Inv Mesh:")
@@ -205,17 +208,17 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
     
     if invertPC
         ### Set up the dip inversion
-        pForPC = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,nWorkers,method);
+        pForPC = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,1,method);
         
         
         ### Create Dip param if we use the GRAD of MATFREE to locate new RBFs
         if(locateRBFwithGrads)
-            pForPC_MATFree = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,nWorkers,MATFree);
+            pForPC_MATFree = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,1,MATFree);
         end
         
-        dobsPC = divideDataToWorkersData(nWorkers,DataPC);
-        Wd_PC = Array{Array{Float32}}(undef,nWorkers);
-        for k=1:nWorkers
+        dobsPC = divideDataToWorkersData(1,DataPC);
+        Wd_PC = Array{Array{Float32}}(undef,1);
+        for k=1:1
             Wd_PC[k] = ones(Float32,size(dobsPC[k]));
         end
     end

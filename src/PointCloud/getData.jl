@@ -21,7 +21,7 @@ Jacobian = convert(SparseMatrixCSC{Float64,Int32},spzeros(length(d),length(m)));
 
 if pFor.method == MATFree	
 	n = [128,128,128];
-	Mesh = getRegularMesh([0.0 1.5 0.0 1.5 0.0 1.5],n);
+	Mesh = getRegularMesh([0.0 3.0 0.0 3.0 0.0 3.0],n);
 	if pFor.method == RBF10Based
 		numParamOfRBF = 10;
 	else
@@ -46,7 +46,7 @@ end
 	
 if pFor.method == RBFBased || pFor.method == RBF10Based || pFor.method == RBF5Based
 	n = [128,128,128];
-	Minv = getRegularMesh([0.0 1.5 0.0 1.5 0.0 1.5],n);
+	Minv = getRegularMesh([0.0 3.0 0.0 3.0 0.0 3.0],n);
 	if pFor.method == RBF10Based
 		numParamOfRBF = 10;
 	else
@@ -75,7 +75,7 @@ function getPCDataRBF(pFor, m, theta_phi,b,numParamOfRBF = 5)
 #Mesh = pFor.Mesh;
 #n = pFor.Mesh.n;
 n = [128,128,128];
-Mesh = getRegularMesh([0.0 1.5 0.0 1.5 0.0 1.5],n);
+Mesh = getRegularMesh([0.0 3.0 0.0 3.0 0.0 3.0],n);
 npc = pFor.npcAll;
 #P is a sparse matrix of size k \times n, where k = #points on point cloud , n = volume size of the mesh
 Jacobians = Array{SparseMatrixCSC{Float64,Int32}}(undef, npc);
