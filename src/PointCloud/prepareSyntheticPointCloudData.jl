@@ -63,7 +63,9 @@ eps = 0.01171875*2.5 #0.0234375;
 mid = (Mesh.domain[1:2:end] + Mesh.domain[2:2:end]) ./ 2.0;
 #Add noise:
 b = b + noiseTrans*randn(size(b,1),3)
+println("noiseangle:",noiseAngle);
 theta_phi_PC = theta_phi_PC +  noiseAngle*randn(size(theta_phi_PC));
+println("theta phi after noise added:",theta_phi_PC);
 b[1,:] .= 0.0;
 theta_phi_PC[1,:] .= 0.0;
 
@@ -71,12 +73,18 @@ Parray = Array{Array{Float64}}(undef,npc);
 Normals = Array{Array{Float64}}(undef,npc);
 global d = [];
 for i=1:npc
-	if(i  == 1)
-		s = 0; e = 1;
-	else
-		s=1; e = 0;
+	s = 0; e = 1;
+	#if(i  == 1)
+	#	s = 0; e = 1;
+	#else
+	#	s=1; e = 0;
+	#end
+	sz = round(Int64,size(P,1)/2)+1;
+	ws  = Weights( vec([collect(LinRange(s,e,sz)) ; zeros(size(P,1)-sz,1)  ] ))
+	if(i == 2)
+		ws = Weights(reverse(vec([collect(LinRange(s,e,sz)) ; zeros(size(P,1)-sz,1)  ] )));
 	end
-	sampledPointIndices = sample(collect(1:size(P,1)),  Weights(collect(LinRange(s,e,round(Int64,size(P,1)))))  , round(Int64,size(P,1)/2),replace=false )
+	sampledPointIndices = sample(collect(1:size(P,1)), ws, round(Int64,size(P,1)/2),replace=false )
 	# println("sampledPointIndices:",sampledPointIndices)
 	P_curr = P[sampledPointIndices,:];
 	Normals[i] = P_curr[:,4:6];
@@ -91,7 +99,7 @@ for i=1:npc
 	curr_points = curr_points .- (mid')
 	curr_points =  ( curr_points )*(R') .+ (mid') 
 	curr_points .+= b[i,:]'; 
-	
+	writedlm(string("PC_rotated_",filename,"_",i,".txt"),curr_points[1:round(Int64,size(curr_points,1)/3),:]);
 	
 	println("size of P:",size(curr_points))
 	Parray[i] = curr_points;
