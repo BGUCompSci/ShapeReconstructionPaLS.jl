@@ -282,7 +282,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
                 end
             end
             mref[:] = m0;
-            mref[end-5*npc+1:end].=0.0;
+            mref[end-5*n_Moves_all+1:end-5*(n_Moves_all - nShots)].=0.0;
             m0[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .+= 0.05*(Mesh.domain[2] - Mesh.domain[1])*randn(nRBF);
             m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.05*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
             m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.05*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
@@ -514,7 +514,7 @@ if !(method == MATBased || method == MATFree)
 		pInv.boundsLow = boundsLow;
 		pInv.boundsHigh = boundsHigh;
 		mref_new[1:n_mc_new] = mc_new[1:n_mc_new];
-		mref_new[end-5*npc+1:end].=0.0;
+		mref_new[end-5*n_Moves_all+1:end-5*(n_Moves_all - nShots)].=0.0;
 		global mc = mc_new;
 		global nRBF += new_nRBF;
 

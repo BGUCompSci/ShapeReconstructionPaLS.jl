@@ -112,10 +112,10 @@ misfun = PCFun; ## least squares
 	### Set up the dip inversion
 	P =  Array{Array{Float64,2}}(P);
 	Normals = Array{Array{Float64,2}}(Normals);
-	pForDip = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,nWorkers,method);
+	pForDip = getPointCloudParam(mesh,P,Normals,theta_phi_dip,trans,nWorkers,method);
 	ndips = npc;
 	if(locateRBFwithGrads)
-		pForDip_MATFree = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,nWorkers,MATFree);
+		pForDip_MATFree = getPointCloudParam(mesh,P,Normals,theta_phi_dip,trans,nWorkers,MATFree);
 	end
 	
 	### Create Dip param if we use the GRAD of MATFREE to locate new RBFs
