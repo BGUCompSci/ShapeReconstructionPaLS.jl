@@ -13,6 +13,7 @@ using ShapeReconstructionPaLS.ShapeFromSilhouette;
 using Statistics
 using Distributed
 using SparseArrays
+using DelimitedFiles
 using Random
 
 ENV["MPLBACKEND"] = "Qt4Agg"
@@ -27,83 +28,56 @@ end
 
 ####
 #Parameters to choose if: inversion with dip only/visual hull only/ joint inversion
-invertPC = false;
-invertVis = true;
+invertPC = true;
+invertVis = false;
 
 #Place new added RBFs according to gradient values or randomly:
-locateRBFwithGrads = false;
-n = [128,128,128];
-Mesh = getRegularMesh([0.0 3.0 0.0 3.0 0.0 3.0],n);
+locateRBFwithGrads = true;
+pad_in_pixels = 25;
+n = [100,100,100].+2*pad_in_pixels;
+Mesh = getRegularMesh([0.0 1.5 0.0 1.5 0.0 1.5],n);
 
 ################################################
 ### Reading the model and pad ##################
 ################################################
 
 model = "fandisksmall";
-file = open(string(pwd(),"/models/",model,".xyz"));
-
-#file = open("pc_full.xyz")
-A = readlines(file);
-A = split.(A);
-B =  Array{Array{Float64,1},1}(undef,length(A));
-N = Array{Array{Float64,1},1}(undef,length(A));
-for i = 1:1:size(A,1)
-    global B[i] = parse.(Float64,A[i])[1:3] .+ 0.5*(Mesh.domain[2] + Mesh.domain[1]);
-    global N[i] = parse.(Float64,A[i])[4:6];
-end
-close(file);
-A = Array{Float64,2}(transpose(hcat(B...)));
-    Normals = Array{Float64,2}(transpose(hcat(N...)));
-    
-
+file_name = string(pwd(),"/../models/",model,".xyz");
+PC_orig = readdlm(file_name);
+Normals = PC_orig[:,3:6];
+PC = PC_orig[:,1:3];
+PC = PC*Diagonal(0.5./maximum(PC,dims=1)[:]);
+PC = PC .+ 0.5*(Mesh.domain[2] + Mesh.domain[1]);
 ##Sort the PC:
-PC  = [ A Normals];
+PC  = [ PC Normals];
 PC = PC[sortperm(PC[:, 1]), :];
 writedlm("SortedPC.txt",PC);
-println("PC:",size(PC)," ", PC[end,:])
-
-
-npc = size(A,1); #Number of points in point cloud
-B = [];
-
-P = A;
-println("Size of P:",size(P));
-
-writedlm(string("originalPC.dat"),convert(Array{Float16},A));
-
-
-#Clear vars:
-indices = [];
-A = []; tmp = [];
-linIdx = [];
+println("PC:",size(PC)," ", PC[end,:]);
 
 ##Read mat file for for visual hull:
-file = matopen(string(pwd(),"/models/",model,".mat"));
-
+file = matopen(string(pwd(),"/../models/",model,".mat"));
 A = read(file, "B");
 close(file);
-A = convert(Array{Float32,3},A[1:8:end,1:8:end,1:8:end]);
-n_inner = collect(size(A));
-pad = ceil.(Int64,1.0*n_inner[1]);
-n = n_inner .+ 2*pad;
-
-Mesh = getRegularMesh([0.0 3.0 0.0 3.0 0.0 3.0],n);
-
-n_tup = tuple(n...)
-volume = prod(n);
-n1 = n_tup[1];
-n2 = n_tup[2];
-n3 = n_tup[3];
-
-m = zeros(Float64,n_tup);
-mask = zeros(Int8,n_tup);
-m[pad+1:end-pad,pad+1:end-pad,pad+1:end-pad] = A; A = 0;
-mask[pad+1:end-pad,pad+1:end-pad,pad+1:end-pad] .= 1;
-if plotting
-    plotModel(m);
-    savefig("TrueModel.png");
-end
+A = convert(Array{Float32,3},A[1:4:end,1:4:end,1:4:end]); # that's 100^3.
+m = zeros(Float64,tuple(n...))
+m[pad_in_pixels+1:end-pad_in_pixels,pad_in_pixels+1:end-pad_in_pixels,pad_in_pixels+1:end-pad_in_pixels] = A;
 A=[];
+
+# n_tup = tuple(n...)
+# volume = prod(n);
+# n1 = n_tup[1];
+# n2 = n_tup[2];
+# n3 = n_tup[3];
+
+# m = zeros(Float64,n_tup);
+# mask = zeros(Int8,n_tup);
+# m[pad+1:end-pad,pad+1:end-pad,pad+1:end-pad] = A; A = 0;
+# mask[pad+1:end-pad,pad+1:end-pad,pad+1:end-pad] .= 1;
+
+# if plotting
+    # plotModel(m);
+    # savefig("TrueModel.png");
+# end
 
 ################################################################
 ### Preparing the synthetic data using mat-free implementation
@@ -113,9 +87,9 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
     n_screen = ScreenMesh.n;
     
     #########################################################################################################
-    ### Dipping Data ########################################################################################
+    ### Point Cloud Data ########################################################################################
     #########################################################################################################
-    samplingBinning = 1;
+    
     npc = 0;
     nShots = 0;
     noiseTrans = 0.0;
@@ -126,7 +100,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
         dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
         trans = [0.0 0 0 ; 0.0 0 0 ]
         theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
-        noiseTrans = 0.1;
+        noiseTrans = 0.01;
         noiseAngles = deg2rad(0.0);
         npc = 2;
         prepareSyntheticPointCloudData(PC,Mesh,npc,theta_phi_dip,trans,noiseTrans,noiseAngles,dipDataFilename);
@@ -148,20 +122,17 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
     #################################################################################################################
     ### Generate and Read the visual data ###############################################################################
     #################################################################################################################
-    
+    samplingBinning = 1;
     if invertVis
-        nShots = 2;
+        nShots = 4;
         noiseSample = 0.0;
         factorShotsCreation = 4;
         theta_phi_vis = deg2rad.(convert(Array{Float64,2}, [rand(0:359,factorShotsCreation*nShots)  rand(0:90,factorShotsCreation*nShots)]));
-        
-        
-        
-        
+        #theta_phi_vis = deg2rad.(convert(Array{Float64,2},[[30.0 60.0] [45.0 90.0]]));
         VisDataFilename = string("visData_",model,"_dataRes",n,"_noiseSampleAnglesTrans",[noiseSample;noiseAngles;noiseTrans],"_shots",nShots);
         
         XlocScreen = Mesh.domain[2];
-        LocCamera = [-16.0*(Mesh.domain[2] - Mesh.domain[1]) ; 0.0 ;0.0]; ## 0.0 here is the middle of the domain
+        LocCamera = [-10.0*(Mesh.domain[2] - Mesh.domain[1]) ; 0.0 ;0.0]; ## 0.0 here is the middle of the domain
         noiseCamLoc = 0.0;
         noiseScreenLoc = 0.0;
         prepareSyntheticVisDataFiles(m,Mesh,ScreenMesh,pad,theta_phi_vis,XlocScreen,LocCamera,
@@ -176,23 +147,23 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
         theta_phi_vis = theta_phi_vis[idsorted[(end-nShots+1):end],:];
         DataVis = DataVis[:,idsorted[(end-nShots+1):end]];
     
-    ScreenMesh 	= getRegularMesh(ScreenDomain,div.(n_screen,samplingBinning));
-    Mesh = getRegularMesh(domain,div.(n,samplingBinning));
-    pad = div(pad,samplingBinning);
-    if  invertVis #samplingBinning==2 &&
-        #DataVis = coarsenByTwo(DataVis,ScreenMesh.n,nShots);
-        if plotting
-            figure();
-            for kkk = 1:nShots
-                dk = DataVis[:,kkk];
-                dk = reshape(dk,tuple(ScreenMesh.n...));
-                    subplot(8,8,kkk);
-                plotModel(dk);
-                
-            end
-            savefig(string("VisTrueModel.png"));
-        end
-    end
+		ScreenMesh 	= getRegularMesh(ScreenDomain,div.(n_screen,samplingBinning));
+		Mesh = getRegularMesh(domain,div.(n,samplingBinning));
+		pad = div(pad,samplingBinning);
+		if  invertVis #samplingBinning==2 &&
+			#DataVis = coarsenByTwo(DataVis,ScreenMesh.n,nShots);
+			if plotting
+				figure();
+				for kkk = 1:nShots
+					dk = DataVis[:,kkk];
+					dk = reshape(dk,tuple(ScreenMesh.n...));
+						subplot(8,8,kkk);
+					plotModel(dk);
+					
+				end
+				savefig(string("VisTrueModel.png"));
+			end
+		end
     end
     
     samplingBinning = 1;
@@ -202,15 +173,15 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
     method = RBF10Based; methodName="RBF10Based";
     
     n_tup = tuple(Mesh.n...);
-        nWorkers = nworkers();
+    nWorkers = nworkers();
     misfun = SSDFun; ## least squares
     
     
     if invertPC
         ### Set up the dip inversion
+		# 0.0 below is margin : TODO: remove margin.
         pForPC = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,1,method);
-        
-        
+
         ### Create Dip param if we use the GRAD of MATFREE to locate new RBFs
         if(locateRBFwithGrads)
             pForPC_MATFree = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,1,MATFree);
@@ -245,44 +216,12 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
     end
     
     
-    
-    isSimple = 0;
-    isRBF10 = 0;
-    
+   
     #########################################################################################################
     ############### Volumetric inversion (pixel-wise) #######################################################
     #########################################################################################################
     if method == MATBased || method == MATFree
-        # #### Set active cells
-        mask = zeros(Int8,n_tup);
-        mask[pad+1:end-pad,pad+1:end-pad,pad+1:end-pad] .= 1;
-        Iact = speye(Float32,prod(Mesh.n));
-        Iact = Iact[:,mask[:] .== 1];mask = 0;
-        IactPlot = Iact;
-        sback = zero(Float32);
-        
-        #### USE A BOUND MODEL or bounds
-        a = 0.0;
-        b = 1.0;
-        
-        nact = size(Iact,2);
-        modfun = identityMod;
-        boundsHigh = zeros(Float32,nact) + b;
-        boundsLow = zeros(Float32,nact) + a;
-        mref = zeros(Float64,nact);
-        modfunForPlotting = modfun;
-        
-        
-        #### Use smoothness regularization
-        regfun = (m, mref, M) -> wTVReg(m, mref, M,Iact=Iact);
-        HesPrec=getSSORCGRegularizationPreconditioner(1.0,1e-3,100)
-        # HesPrec = getEmptyRegularizationPreconditioner();
-        alpha = 1e-10; #1e-10;
-        m0 = copy(mref);
-        ###############################################################################################
-        ############## USE RBF dictionary #############################################################
-        ###############################################################################################
-        
+        error("Not relevant for PC.")
     else
         nRBF = 2;
         
@@ -318,16 +257,16 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
             mref = zeros(Float32,nAll);
             m0   = zeros(Float64,n_m_simple);
             mCenters = zeros(Float32,n_tup);
-            mref[1:numParamOfRBF:n_m_simple] = ParamLevelSet.centerHeavySide*2.0*rand(nRBF);
+            mref[1:numParamOfRBF:n_m_simple] .= ParamLevelSet.centerHeavySide*2.0;
             if isRBF10
-                mref[2:10:n_m_simple] .= 1.0;
-                mref[5:10:n_m_simple] .= 1.0;
-                mref[7:10:n_m_simple] .= 1.0;
+                mref[2:10:n_m_simple] .= 7.5;
+                mref[5:10:n_m_simple] .= 7.5;
+                mref[7:10:n_m_simple] .= 7.5;
                 boundsLow[2:10:n_m_simple] .= 0.05;
                 boundsLow[5:10:n_m_simple] .= 0.05;
                 boundsLow[7:10:n_m_simple] .= 0.05;
             else
-                mref[2:5:n_m_simple] .= 1.0;
+                mref[2:5:n_m_simple] .= 2.0;
                 boundsLow[2:5:n_m_simple] .= 0.05;
             end
             mref[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .= (Mesh.domain[1] + Mesh.domain[2])/2;
@@ -344,11 +283,11 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
             end
             mref[:] = m0;
             mref[end-5*npc+1:end].=0.0;
-            m0[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .+= 0.1*(Mesh.domain[2] - Mesh.domain[1])*randn(nRBF);
-            m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.1*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
-            m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.1*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
+            m0[(numParamOfRBF-2):numParamOfRBF:n_m_simple] .+= 0.05*(Mesh.domain[2] - Mesh.domain[1])*randn(nRBF);
+            m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.05*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
+            m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.05*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
             
-            alpha = 5e-1;
+            alpha = 5e+1;
             
             II = (sparse(1.0I, nAll,nAll));
             regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);
@@ -453,10 +392,9 @@ minUpdate = 0.01, maxIter = maxit,HesPrec=HesPrec);
 #### Projected Gauss Newton
 mc = m0;
 Dc = nothing
-    pInv.maxIter = 10;
-    global mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
-
 pInv.maxIter = 10;
+global mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
+pInv.maxIter = 50;
 myDump(mc,0,1,pInv,0,methodName,npc,noiseAngles,noiseTrans,invertVis,nShots);
 
 
@@ -559,7 +497,7 @@ if !(method == MATBased || method == MATFree)
 		boundsLow[1:n_mc_old] = pInv.boundsLow[1:n_mc_old];
 		boundsHigh[1:n_mc_old] = pInv.boundsHigh[1:n_mc_old];
 		
-		eeps =  1/(0.01171875*2.5)
+		eeps =  1.0/(0.01171875*2.5)
 		if isRBF10
 			mc_new[(n_mc_old+2):10:n_mc_new] .= eeps #10.0;
 			mc_new[(n_mc_old+5):10:n_mc_new] .= eeps#10.0;

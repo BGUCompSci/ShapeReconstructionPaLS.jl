@@ -42,13 +42,13 @@ pad = 10;
 B_pad = zeros(n[1]+2*pad,n[2]+2*pad,n[3]+2*pad);
 B_pad[pad+1:end-pad,pad+1:end-pad,pad+1:end-pad] .= B;
 println("Smooth!")
-B_pad = smoothObj(B_pad,2);
+B_pad = smoothObj(B_pad,3);
 PC_subs = ceil.(Int64,(PC.+0.5).*n[1]).+pad;
 println("starting test");
 for k = 1:size(PC_subs,1)
 	testval = B_pad[PC_subs[k,1],PC_subs[k,2],PC_subs[k,3]];
-	if testval >= 1.0
-		println(B_pad[PC_subs[k,1].+ (-1:1),PC_subs[k,2].+ (-1:1),PC_subs[k,3].+ (-1:1)])
+	if testval >= 1.0 - 1e-8 || testval < 1e-8
+		display(B_pad[PC_subs[k,1].+ (-1:1),PC_subs[k,2].+ (-1:1),PC_subs[k,3].+ (-1:1)]);
 		println(testval)
 		error("IM HERE");
 	end
