@@ -9,7 +9,7 @@ using ShapeReconstructionPaLS
 using ShapeReconstructionPaLS.PointCloud;
 using ParamLevelSet;
 using ShapeReconstructionPaLS.ShapeFromSilhouette;
-@everywhere using ShapeReconstructionPaLS.Utils;
+ using ShapeReconstructionPaLS.Utils;
 using Statistics
 using Distributed
 using SparseArrays
@@ -100,7 +100,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
         dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
         trans = [0.0 0 0 ; 0.0 0 0 ]
         theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
-        noiseTrans = 0.01;
+        noiseTrans = 0.00;
         noiseAngles = deg2rad(0.0);
         npc = 2;
         prepareSyntheticPointCloudData(PC,Mesh,npc,theta_phi_dip,trans,noiseTrans,noiseAngles,dipDataFilename);
@@ -180,11 +180,11 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
     if invertPC
         ### Set up the dip inversion
 		# 0.0 below is margin : TODO: remove margin.
-        pForPC = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,1,method);
+        pForPC = getPointCloudParam(Mesh,P,Normals,theta_phi_dip,trans,1,method);
 
         ### Create Dip param if we use the GRAD of MATFREE to locate new RBFs
         if(locateRBFwithGrads)
-            pForPC_MATFree = getPointCloudParam(P,Normals,0.0,theta_phi_dip,trans,1,MATFree);
+            pForPC_MATFree = getPointCloudParam(Mesh,P,Normals,theta_phi_dip,trans,1,MATFree);
         end
         
         dobsPC = divideDataToWorkersData(1,DataPC);
@@ -287,7 +287,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
             m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.05*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
             m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.05*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
             
-            alpha = 5e+1;
+            alpha = 5e-2;
             
             II = (sparse(1.0I, nAll,nAll));
             regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);

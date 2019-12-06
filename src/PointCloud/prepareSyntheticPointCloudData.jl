@@ -99,7 +99,7 @@ for i=1:npc
 	curr_points = curr_points .- (mid')
 	curr_points =  ( curr_points )*(R') .+ (mid') 
 	curr_points .+= b[i,:]'; 
-	writedlm(string("PC_rotated_",filename,"_",i,".txt"),curr_points[1:round(Int64,size(curr_points,1)/3),:]);
+	writedlm(string("PC_rotated_",filename,"_",i,".txt"),curr_points[round(Int64,size(curr_points,1)/3)+1:round(Int64,2*size(curr_points,1)/3),:]);
 	
 	println("size of P:",size(curr_points))
 	Parray[i] = curr_points;
