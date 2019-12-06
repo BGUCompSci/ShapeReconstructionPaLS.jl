@@ -152,7 +152,7 @@ ScreenMesh = getRegularMesh(Mesh.domain[3:6],n[2:3]); ## for vis.
         noiseSample = 0.0;
         factorShotsCreation = 4;
         theta_phi_vis = deg2rad.(convert(Array{Float64,2}, [rand(0:359,factorShotsCreation*nShots)  rand(0:90,factorShotsCreation*nShots)]));
-        theta_phi_vis = deg2rad.(convert(Array{Float64,2},[[30.0 60.0] [45.0 90.0]]))
+        theta_phi_vis = deg2rad.(convert(Array{Float64,2},[[30.0 60.0] ;[45.0 90.0]]))
         
         
         
