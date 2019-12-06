@@ -9,7 +9,7 @@ m_len = length(mAll) - numElementsMove1 - numElementsMove2;
 
 Ind = 0;
 
-J = speye(Float32,length(mAll));
+J = sparse(1.0I,length(mAll),length(mAll));
 if choose==1
 	Ind = 1:(m_len + numElementsMove1)
 else

@@ -8,49 +8,49 @@ using StatsBase
 
 using jInv
 export prepareSyntheticPointCloudData
-# export subv2ind,ind2subv
-# function subv2ind(shape, cindices)
-    # """Return linear indices given vector of cartesian indices.
-    # shape: d-tuple of dimensions.
-    # cindices: n-iterable of d-tuples, each containing cartesian indices.
-    # Returns: n-vector of linear indices.
+export subv2ind,ind2subv
+function subv2ind(shape, cindices)
+    """Return linear indices given vector of cartesian indices.
+    shape: d-tuple of dimensions.
+    cindices: n-iterable of d-tuples, each containing cartesian indices.
+    Returns: n-vector of linear indices.
 
-    # Based on:
-    # https://discourse.julialang.org/t/psa-replacement-of-ind2sub-sub2ind-in-julia-0-7/14666/8
-    # Similar to this matlab function:
-    # https://github.com/tminka/lightspeed/blob/master/subv2ind.m
-    # """
-    # lndx = LinearIndices(Dims(shape))
-    # n = length(cindices)
-    # out = Array{Int}(undef, n)
-    # for i = 1:n
-        # out[i] = lndx[cindices[i]...]
-    # end
-    # return out
-# end
+    Based on:
+    https://discourse.julialang.org/t/psa-replacement-of-ind2sub-sub2ind-in-julia-0-7/14666/8
+    Similar to this matlab function:
+    https://github.com/tminka/lightspeed/blob/master/subv2ind.m
+    """
+    lndx = LinearIndices(Dims(shape))
+    n = length(cindices)
+    out = Array{Int}(undef, n)
+    for i = 1:n
+        out[i] = lndx[cindices[i]...]
+    end
+    return out
+end
 
 
-# function ind2subv(shape, indices)
-    # """Map linear indices to cartesian.
-    # shape: d-tuple with size of each dimension.
-    # indices: n-iterable with linear indices.
-    # Returns: n-vector of d-tuples with cartesian indices.
+function ind2subv(shape, indices)
+    """Map linear indices to cartesian.
+    shape: d-tuple with size of each dimension.
+    indices: n-iterable with linear indices.
+    Returns: n-vector of d-tuples with cartesian indices.
 
-    # Based on:
-    # https://discourse.julialang.org/t/psa-replacement-of-ind2sub-sub2ind-in-julia-0-7/14666/8
-    # Similar to this matlab function:
-    # https://github.com/probml/pmtk3/blob/master/matlabTools/util/ind2subv.m
-    # """
-    # n = length(indices)
-    # d = length(shape)
-    # cndx = CartesianIndices(Dims(shape))
-    # out = Array{Tuple}(undef, n)
-    # for i=1:n
-        # lndx = indices[i]
-        # out[i] = cndx[lndx]
-    # end
-    # return out
-# end
+    Based on:
+    https://discourse.julialang.org/t/psa-replacement-of-ind2sub-sub2ind-in-julia-0-7/14666/8
+    Similar to this matlab function:
+    https://github.com/probml/pmtk3/blob/master/matlabTools/util/ind2subv.m
+    """
+    n = length(indices)
+    d = length(shape)
+    cndx = CartesianIndices(Dims(shape))
+    out = Array{Tuple}(undef, n)
+    for i=1:n
+        lndx = indices[i]
+        out[i] = cndx[lndx]
+    end
+    return out
+end
 
 
 function loc2cs3D(loc1::Union{Int64,Array{Int64}},loc2::Union{Int64,Array{Int64}},loc3::Union{Int64,Array{Int64}},n::Array{Int64,1})
@@ -65,9 +65,9 @@ mid = (Mesh.domain[1:2:end] + Mesh.domain[2:2:end]) ./ 2.0;
 b = b + noiseTrans*randn(size(b,1),3)
 println("noiseangle:",noiseAngle);
 theta_phi_PC = theta_phi_PC +  noiseAngle*randn(size(theta_phi_PC));
-println("theta phi after noise added:",theta_phi_PC);
 b[1,:] .= 0.0;
 theta_phi_PC[1,:] .= 0.0;
+println("theta phi after noise added:",theta_phi_PC);
 
 Parray = Array{Array{Float64}}(undef,npc);
 Normals = Array{Array{Float64}}(undef,npc);
