@@ -18,7 +18,7 @@ using Random
 
 ENV["MPLBACKEND"] = "Qt4Agg"
 
-plotting = true;
+plotting = false;
 
 if plotting
     using PyPlot;
@@ -373,20 +373,21 @@ function myDump(mc::Vector,Dc,iter,pInv,pMis,method="",npc=0,noiseAngle=0,noiseT
 	fullMc = plotFun(mc)[1];
 	fullMc = reshape(IactPlot*fullMc[:],ntup);
 	# fullMc = reshape(fullMc[:],ntup);
-	close(888);
-	figure(888);
-	#plotModel(fullMc,true,pInv.MInv);
-	plotModel(fullMc,includeMeshInfo = true,M_regular = pInv.MInv);
-	sleep(1.0);
-	savefig(string("It",iter,"_",ntup,".png"));
+	if plotting
+		close(888);
+		figure(888);
+		#plotModel(fullMc,true,pInv.MInv);
+		plotModel(fullMc,includeMeshInfo = true,M_regular = pInv.MInv);
+		sleep(1.0);
+		savefig(string("It",iter,"_",ntup,".png"));
+	end
 	writedlm(string("Params_iter_",iter,".dat"),convert(Array{Float16},mc));
 	writedlm(string("Volume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
-	
-
 end
 
 
 function plotVisData(Dc)
+if plotting
 	close("all");
 	close(999);
 	figure(999);
@@ -396,6 +397,7 @@ function plotVisData(Dc)
 		subplot(2,2,kkk);
 		plotModel(dk);
 	end
+end
 end
 
 cgit  = 50; # not used.
@@ -425,7 +427,7 @@ if !(method == MATBased || method == MATFree)
 	grad_u = nothing;
 	new_RBF_location = [];
 	@sync for iterNum=2:outerIter
-		new_nRBF = 10;
+		new_nRBF = 5;
 		println("Inversion using ", nRBF + new_nRBF," basis functions")
 		# Dc - the data using our method.
 		global Dc = Dc;

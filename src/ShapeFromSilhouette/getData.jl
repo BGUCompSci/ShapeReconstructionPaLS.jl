@@ -89,15 +89,13 @@ elseif pFor.method == RBFBased || pFor.method == RBF10Based
 	mrot,Jrot 			= rotateAndMoveRBF(m1,Mesh,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
 	d,JacT 				= getVisDataRBF(pFor, mrot,theta_phi,b,mask,heavisideVisData,numParamOfRBF);
 	# multiply Jacobian with Jrot, and then take the transpose.
-	Idxs = 				getIpIdxs
+	Idxs = 				getIpIdxs;
 	
 	JacobianT = convert(SparseMatrixCSC{Float64,Int32},spzeros(length(m),prod(size(d))));
-	IpIdxs = getIpIdxs(pFor.workerSubIdxs,nRBF,pFor.nshotsAll,numParamOfRBF);
-	#mrot,Jrot = rotateAndMoveRBF(m1,Mesh,theta_phi,b;computeJacobian = 1,numParamOfRBF=numParamOfRBF);
-	
+	IpIdxs = getIpIdxs(pFor.workerSubIdxs,nRBF,pFor.nshotsAll,numParamOfRBF);	
 	JacobianT[IpIdxs,:] = Jrot'*JacT;
 	pFor.Jacobian = JacobianT; 
-	
+	GC.gc();
 	# pFor.Jacobian 		= Jrot'*JacT;
 end
 return d,pFor;
@@ -121,9 +119,6 @@ Xc = convert(Array{Float32,2},getCellCenteredGrid(Mesh));
 
 Jacobians = Array{SparseMatrixCSC{Float64,Int64}}(undef,nshots);
 
-nz = 1;
-volCell = prod(Mesh.h);
-
 for ii = 1:nshots
 	u,JBuilder = ParamLevelSetModelFunc(Mesh,mrot[:,ii];computeJacobian = 1,sigma = sigmaH,
 										Xc = Xc,u = u,dsu = dsu,Jbuilder = JBuilder,numParamOfRBF=numParamOfRBF);
@@ -142,7 +137,7 @@ export softMaxProjWithSigmoid
 function softMaxProjWithSigmoid(Proj_g::SparseMatrixCSC,u::Vector{Float64})
 	etta = 40.0;
 	Proj = u.*Proj_g;
-	dropzeros(Proj);
+	dropzeros!(Proj);
 	for rayIdx = 1:size(Proj,2)
 		# if Proj.colptr[rayIdx+1] > Proj.colptr[rayIdx]
 			# println(Proj.nzval[Proj.colptr[rayIdx]:Proj.colptr[rayIdx+1]-1])
@@ -161,7 +156,7 @@ function softMaxProjWithSigmoid(Proj_g::SparseMatrixCSC,u::Vector{Float64})
 		# end
 		
 	end
-	dropzeros(Proj)
+	dropzeros!(Proj)
 	Proj.nzval[:].=1.0;
 	relevant = findall(sum(Proj,dims=2)[:].> 1e-16);
 	y = zeros(size(u));
