@@ -28,7 +28,7 @@ end
 
 ####
 #Parameters to choose if: inversion with dip only/visual hull only/ joint inversion
-invertPC = false;
+invertPC = true;
 invertVis = true;
 
 #Place new added RBFs according to gradient values or randomly:
@@ -41,7 +41,7 @@ Mesh = getRegularMesh([0.0 1.5 0.0 1.5 0.0 1.5],n);
 ### Reading the model and pad ##################
 ################################################
 
-model = "fandisksmall";
+model = "fandiskpc";
 file_name = string(pwd(),"/../models/",model,".xyz");
 PC_orig = readdlm(file_name);
 Normals = PC_orig[:,4:6];
@@ -85,15 +85,15 @@ n_screen = ScreenMesh.n;
 
 npc = 0;
 nShots = 0;
-noiseTrans = 0.0;
-noiseAngles = 1.0;
+noiseTrans = 0.015;
+noiseAngles = 2.0;
 if invertPC
 	println("Data gen resolution:")
 	println(n)
 	dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
 	trans = [0.0 0 0 ; 0.0 0 0 ]
 	theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
-	noiseTrans = 0.00;
+	noiseTrans = 0.03;
 	noiseAngles = deg2rad(noiseAngles);
 	npc = 2;
 	prepareSyntheticPointCloudData(PC,Mesh,npc,theta_phi_dip,trans,noiseTrans,noiseAngles,dipDataFilename);
@@ -115,21 +115,25 @@ end
 #################################################################################################################
 ### Generate and Read the visual data ###############################################################################
 #################################################################################################################
+noiseAnglesVis = 0.0;        
+noiseTransVis = 0.0;
 samplingBinning = 1;
 if invertVis
-	nShots = 1;
+	nShots = 8;
 	noiseSample = 0.0;
 	factorShotsCreation = 4;
 	theta_phi_vis = deg2rad.(convert(Array{Float64,2}, [rand(0:359,factorShotsCreation*nShots)  rand(0:90,factorShotsCreation*nShots)]));
-	#theta_phi_vis = deg2rad.(convert(Array{Float64,2},[[30.0 60.0] [45.0 90.0]]));
 	VisDataFilename = string("visData_",model,"_dataRes",n,"_noiseSampleAnglesTrans",[noiseSample;noiseAngles;noiseTrans],"_shots",nShots);
 	
 	XlocScreen = Mesh.domain[2];
 	LocCamera = [-10.0*(Mesh.domain[2] - Mesh.domain[1]) ; 0.0 ;0.0]; ## 0.0 here is the middle of the domain
 	noiseCamLoc = 0.0;
 	noiseScreenLoc = 0.0;
+	
+    noiseAnglesVis = deg2rad(0.0);        
+	noiseTransVis = 0.0;
 	prepareSyntheticVisDataFiles(m,Mesh,ScreenMesh,pad_in_pixels,theta_phi_vis,XlocScreen,LocCamera,
-	VisDataFilename,factorShotsCreation*nShots, noiseCamLoc, noiseScreenLoc, noiseAngles,noiseTrans,MATFree);
+	VisDataFilename,factorShotsCreation*nShots, noiseCamLoc, noiseScreenLoc, noiseAnglesVis,noiseTransVis,MATFree);
 	
 	##################################################################################################################
 	##################################################################################################################
@@ -194,7 +198,7 @@ if invertVis
 	Wd_Vis = Array{Array{Float32}}(undef,nWorkers);
 	for k=1:length(Wd_Vis)
 		println("sqrt:",0.1*(Mesh.domain[2]-Mesh.domain[1])*prod(Mesh.h[2:3]));
-		Wd_Vis[k] = 1e+2*sqrt((Mesh.domain[2]-Mesh.domain[1])*prod(Mesh.h[2:3]))*ones(Float32,size(dobsVis[k]));
+		Wd_Vis[k] = 1e+1*sqrt((Mesh.domain[2]-Mesh.domain[1])*prod(Mesh.h[2:3]))*ones(Float32,size(dobsVis[k]));
 		# Wd_Vis[k] = sqrt(0.3)*ones(Float32,size(dobsVis[k]));
 		
 	end
@@ -252,9 +256,9 @@ else
 	mCenters = zeros(Float32,n_tup);
 	mref[1:numParamOfRBF:n_m_simple] .= ParamLevelSet.centerHeavySide*2.0;
 	if isRBF10
-		mref[2:10:n_m_simple] .= 15.0;
-		mref[5:10:n_m_simple] .= 15.0;
-		mref[7:10:n_m_simple] .= 15.0;
+		mref[2:10:n_m_simple] .= 4.0;
+		mref[5:10:n_m_simple] .= 4.0;
+		mref[7:10:n_m_simple] .= 4.0;
 		boundsLow[2:10:n_m_simple] .= 0.05;
 		boundsLow[5:10:n_m_simple] .= 0.05;
 		boundsLow[7:10:n_m_simple] .= 0.05;
@@ -280,10 +284,10 @@ else
 	m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.1*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
 	m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.1*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
 	
-	alpha = 5e+0;
+	alpha = 5e-1;
 	
 	II = (sparse(1.0I, nAll,nAll));
-	II.nzval[(n_m_simple+1):(n_m_simple+5*npc)] .= 1e+3;
+	#II.nzval[(n_m_simple+1):(n_m_simple+5*npc)] .= 1e+3;
 	regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);
 	# HesPrec = getEmptyRegularizationPreconditioner();
 	HesPrec = getSSORCGRegularizationPreconditioner(1.0,1e-2,1);
@@ -291,7 +295,7 @@ else
 	if isRBF10
 		spd_reg = (m,mref,M) -> RBF_SPD_regularization(m,mref,nRBF);
 		regfun 	 		= [regfun;spd_reg];
-		alpha 		 	= [alpha;(1e-1)*alpha];
+		alpha 		 	= [alpha;(1e-3)*alpha];
 		mref 			= [mref zeros(size(mref))];
 	end
 end
@@ -374,13 +378,13 @@ function myDump(mc::Vector,Dc,iter,pInv,pMis,method="",npc=0,noiseAngle=0,noiseT
 	#plotModel(fullMc,true,pInv.MInv);
 	plotModel(fullMc,includeMeshInfo = true,M_regular = pInv.MInv);
 	sleep(1.0);
-	savefig(string("It",iter,"_",ntup,".png"));
-	writedlm(string("Params_iter_",iter,".dat"),convert(Array{Float16},mc));
-	writedlm(string("Volume_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
+	savefig(string("It_2nd",iter,"_",ntup,".png"));
+	writedlm(string("Params_2nd_iter_",iter,".dat"),convert(Array{Float16},mc));
+	writedlm(string("Volume_2nd_iter_",iter,"_",ntup,".dat"),convert(Array{Float16},fullMc));
 end
 
 pInv = getInverseParam(Mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
-maxStep = 1e-1,pcgMaxIter=cgit,pcgTol=pcgTol,
+maxStep = 2e-1,pcgMaxIter=cgit,pcgTol=pcgTol,
 minUpdate = 0.01, maxIter = maxit,HesPrec=HesPrec);
 
 
@@ -420,7 +424,7 @@ if !(method == MATBased || method == MATFree)
 			#gradMis = (fetch(Dd[1])-DataPC).^2;	
 			gradMis = ((Dd)-DataPC).^2;
 			sp = sortperm(gradMis,rev = true);
-			sp = sp[1:round(Int64,length(sp)/4.0)];
+			sp = sp[1:round(Int64,length(sp)/10.0)];
 			sp = sp[randperm(length(sp))];
 			idxs = sp[1:new_nRBF];
 			bwdSubs = [P[1] ; P[2]];
@@ -487,7 +491,7 @@ if !(method == MATBased || method == MATFree)
 		boundsLow[1:n_mc_old] = pInv.boundsLow[1:n_mc_old];
 		boundsHigh[1:n_mc_old] = pInv.boundsHigh[1:n_mc_old];
 		
-		eeps =  1.0/(0.01171875*2.5)
+		eeps =  1.0/(0.01171875*80)
 		if isRBF10
 			mc_new[(n_mc_old+2):10:n_mc_new] .= eeps #10.0;
 			mc_new[(n_mc_old+5):10:n_mc_new] .= eeps#10.0;
@@ -513,7 +517,7 @@ if !(method == MATBased || method == MATFree)
 		#II = speye(Float32,length(mc_new));
 		len = Int64(length(mc_new));
 		IIs = sparse(1.0I,len,len);
-		IIs.nzval[(n_mc_new+1):(n_mc_new+5*npc)] .= 1e+3;
+		#IIs.nzval[(n_mc_new+1):(n_mc_new+5*npc)] .= 1e+3;
 		pInv.regularizer = (m, mref, M)->TikhonovReg(m,mref,M,IIs);
 		
 		if isRBF10
