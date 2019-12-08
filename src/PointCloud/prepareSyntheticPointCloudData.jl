@@ -62,7 +62,7 @@ function prepareSyntheticPointCloudData(P,Mesh::RegularMesh,npc::Int64,theta_phi
 eps = 0.01171875*2.5 #0.0234375;
 mid = (Mesh.domain[1:2:end] + Mesh.domain[2:2:end]) ./ 2.0;
 #Add noise:
-b = b + noiseTrans*randn(size(b,1),3)
+b = b + noiseTrans*ones(size(b,1),3)
 println("noiseangle:",noiseAngle);
 theta_phi_PC = theta_phi_PC +  noiseAngle*randn(size(theta_phi_PC));
 b[1,:] .= 0.0;
@@ -74,11 +74,6 @@ Normals = Array{Array{Float64}}(undef,npc);
 global d = [];
 for i=1:npc
 	s = 0; e = 1;
-	#if(i  == 1)
-	#	s = 0; e = 1;
-	#else
-	#	s=1; e = 0;
-	#end
 	sz = round(Int64,size(P,1)/2)+1;
 	ws  = Weights( vec([collect(LinRange(s,e,sz)) ; zeros(size(P,1)-sz,1)  ] ))
 	if(i == 2)
@@ -94,7 +89,6 @@ for i=1:npc
 	subsForward = cursubs + (eps .*Normals[i]);
 	subsBackward = cursubs - (eps .*Normals[i]);
 	curr_points = [subsBackward; cursubs; subsForward];
-	
 	R = getRotate3D(theta_phi_PC[i,1],theta_phi_PC[i,2]);
 	curr_points = curr_points .- (mid')
 	curr_points =  ( curr_points )*(R') .+ (mid') 

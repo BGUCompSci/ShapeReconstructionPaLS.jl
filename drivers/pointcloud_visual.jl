@@ -9,7 +9,7 @@ using ShapeReconstructionPaLS
 using ShapeReconstructionPaLS.PointCloud;
 using ParamLevelSet;
 using ShapeReconstructionPaLS.ShapeFromSilhouette;
- using ShapeReconstructionPaLS.Utils;
+@everywhere using ShapeReconstructionPaLS.Utils;
 using Statistics
 using Distributed
 using SparseArrays
@@ -26,10 +26,13 @@ if plotting
     close("all");
 end
 
+
+
+
 ####
 #Parameters to choose if: inversion with dip only/visual hull only/ joint inversion
 invertPC = true;
-invertVis = true;
+invertVis = false;
 
 #Place new added RBFs according to gradient values or randomly:
 locateRBFwithGrads = invertPC;
@@ -42,17 +45,23 @@ Mesh = getRegularMesh([0.0 1.5 0.0 1.5 0.0 1.5],n);
 ################################################
 
 model = "fandiskpc";
-file_name = string(pwd(),"/../models/",model,".xyz");
-PC_orig = readdlm(file_name);
-Normals = PC_orig[:,4:6];
-PC = PC_orig[:,1:3];
-#PC = PC*Diagonal(0.5./maximum(PC,dims=1)[:]);
-PC = PC .+ 0.5*(Mesh.domain[2] + Mesh.domain[1]);
-##Sort the PC:
-PC  = [ PC Normals];
-PC = PC[sortperm(PC[:, 1]), :];
-writedlm("SortedPC.txt",PC);
-println("PC:",size(PC)," ", PC[end,:]);
+# model = "fandisksmall";
+if invertPC
+	file_name = string(pwd(),"/../models/",model,".xyz");
+	PC_orig = readdlm(file_name);
+	Normals = PC_orig[:,4:6];
+	PC = PC_orig[:,1:3];
+	#PC = PC*Diagonal(0.5./maximum(PC,dims=1)[:]);
+	PC = PC .+ 0.5*(Mesh.domain[2] + Mesh.domain[1]);
+	##Sort the PC:
+	PC  = [ PC Normals];
+	PC = PC[sortperm(PC[:, 1]), :];
+	writedlm("SortedPC.txt",PC);
+	println("PC:",size(PC)," ", PC[end,:]);
+	if plotting
+		scatter3D(Vector(PC[:,1]),Vector(PC[:,2]),Vector(PC[:,3]),s=0.1,alpha=1.0,color="blue")
+	end
+end
 
 global m = 0;
 if invertVis
@@ -86,18 +95,18 @@ n_screen = ScreenMesh.n;
 npc = 0;
 nShots = 0;
 noiseTrans = 0.015;
-noiseAngles = 2.0;
+noiseAngles = 5.0;
 if invertPC
 	println("Data gen resolution:")
 	println(n)
 	dipDataFilename = string("pointCloudData",model,"_dataRes",n,1);
 	trans = [0.0 0 0 ; 0.0 0 0 ]
 	theta_phi_dip = [0.0 0.0 ; 0.0 0.0];
-	noiseTrans = 0.03;
+	noiseTrans = 0.1;
 	noiseAngles = deg2rad(noiseAngles);
 	npc = 2;
 	prepareSyntheticPointCloudData(PC,Mesh,npc,theta_phi_dip,trans,noiseTrans,noiseAngles,dipDataFilename);
-	
+	PC = [];
 	#########################################################################################################
 	### Read the dipping data ###############################################################################
 	#########################################################################################################
@@ -105,7 +114,15 @@ if invertPC
 	### Set up the dip inversion
 	P =  Array{Array{Float64,2}}(P);
 	Normals = Array{Array{Float64,2}}(Normals);
-
+	
+	if plotting
+		close(998);
+		figure(998);
+		idxs = round(Int64,size(P[1],1)/3)+1:round(Int64,2*size(P[1],1)/3)
+		scatter3D(Vector(P[1][idxs,1]),Vector(P[1][idxs,2]),Vector(P[1][idxs,3]),s=0.1,alpha=1.0,color="blue")
+		idxs = round(Int64,size(P[2],1)/3)+1:round(Int64,2*size(P[2],1)/3)
+		scatter3D(Vector(P[2][idxs,1]),Vector(P[2][idxs,2]),Vector(P[2][idxs,3]),s=0.1,alpha=1.0,color="red")
+	end
 end
 
 
@@ -162,6 +179,38 @@ if invertVis
 		end
 	end
 end
+
+
+
+function plotVisData(Dc)
+if plotting
+	close("all");
+	close(999);
+	figure(999);
+	for kkk = 1:nShots
+		dk = Dc[:,kkk];
+		dk = reshape(dk,tuple(ScreenMesh.n...));
+		subplot(2,2,kkk);
+		plotModel(dk);
+	end
+end
+end
+
+# function plotPCData(PC)
+# if plotting
+	# close("all");
+	# close(998);
+	# figure(998);
+	# for kkk = 1:npc
+		# dk = Dc[:,kkk];
+		# dk = reshape(dk,tuple(ScreenMesh.n...));
+		# subplot(2,2,kkk);
+		# plotModel(dk);
+	# end
+# end
+# end
+
+
 
 samplingBinning = 1;
 println("Inv Mesh:")
@@ -284,10 +333,10 @@ else
 	m0[(numParamOfRBF-1):numParamOfRBF:n_m_simple] .+= 0.1*(Mesh.domain[4] - Mesh.domain[3])*randn(nRBF);
 	m0[numParamOfRBF:numParamOfRBF:n_m_simple]     .+= 0.1*(Mesh.domain[6] - Mesh.domain[5])*randn(nRBF);
 	
-	alpha = 5e-1;
+	alpha = 1e+3;
 	
 	II = (sparse(1.0I, nAll,nAll));
-	#II.nzval[(n_m_simple+1):(n_m_simple+5*npc)] .= 1e+3;
+	II.nzval[(n_m_simple+1):(n_m_simple+5*npc)] .= 1e+4;
 	regfun = (m, mref, M)->TikhonovReg(m,mref,M,II);
 	# HesPrec = getEmptyRegularizationPreconditioner();
 	HesPrec = getSSORCGRegularizationPreconditioner(1.0,1e-2,1);
@@ -295,7 +344,7 @@ else
 	if isRBF10
 		spd_reg = (m,mref,M) -> RBF_SPD_regularization(m,mref,nRBF);
 		regfun 	 		= [regfun;spd_reg];
-		alpha 		 	= [alpha;(1e-3)*alpha];
+		alpha 		 	= [alpha;(1e-5)*alpha];
 		mref 			= [mref zeros(size(mref))];
 	end
 end
@@ -385,7 +434,7 @@ end
 
 pInv = getInverseParam(Mesh,modfun,regfun,alpha,mref,boundsLow,boundsHigh,
 maxStep = 2e-1,pcgMaxIter=cgit,pcgTol=pcgTol,
-minUpdate = 0.01, maxIter = maxit,HesPrec=HesPrec);
+minUpdate = 0.001, maxIter = maxit,HesPrec=HesPrec);
 
 
 #### Projected Gauss Newton
@@ -393,7 +442,7 @@ mc = m0;
 Dc = nothing
 pInv.maxIter = 10;
 global mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
-pInv.maxIter = 50;
+pInv.maxIter = 20;
 myDump(mc,0,1,pInv,0,methodName,npc,noiseAngles,noiseTrans,invertVis,nShots);
 
 
@@ -406,8 +455,9 @@ if !(method == MATBased || method == MATFree)
 	grad_u = nothing;
 	new_RBF_location = [];
 	@sync for iterNum=2:outerIter
-		println("Inversion using ", nRBF," basis functions")
 		new_nRBF = 10;
+		println("Inversion using ", nRBF + new_nRBF," basis functions")
+		
 		# Dc - the data using our method.
 		global Dc = Dc;
 		
@@ -433,7 +483,7 @@ if !(method == MATBased || method == MATFree)
 		else
 			u = modfunForPlotting(mc)[1];
 			#Ii = findall(x -> x >0.2 && x<0.5,u);
-			Ii = findall(x -> x >0.4 && x<0.8,u);
+			Ii = findall(x -> x >0.2 && x<0.9,u);
 			if length(Ii) > new_nRBF
 				Ii = Ii[randperm(length(Ii))[1:new_nRBF]];
 			end
@@ -479,7 +529,10 @@ if !(method == MATBased || method == MATFree)
 		mc_new[1:n_mc_old] = mc[1:n_mc_old];
 
 		mc_new[(n_mc_new+1):end] = mc[(n_mc_old+1):end];
+		## Below we set the reference for moves (misalignments) to be 0, assuming they are small
 		mref_new[(n_mc_new+1):end] = mref[(n_mc_old+1):end];
+		## Below we set the reference for moves (misalignments) to be the previous iteration, assuming they are not so small, and can accumulate
+		# mref_new[(n_mc_new+1):end] = mc[(n_mc_old+1):end];
 
 		mc_new[(n_mc_old+1):numParamOfRBF:n_mc_new] .= 0.0; #ParamLevelSet.centerHeavySide - ParamLevelSet.deltaHeavySide;
 		mc_new[(n_mc_old+numParamOfRBF-2):numParamOfRBF:n_mc_new] = X1;
@@ -491,7 +544,7 @@ if !(method == MATBased || method == MATFree)
 		boundsLow[1:n_mc_old] = pInv.boundsLow[1:n_mc_old];
 		boundsHigh[1:n_mc_old] = pInv.boundsHigh[1:n_mc_old];
 		
-		eeps =  1.0/(0.01171875*80)
+		eeps =  1.0/(0.01171875*10.0*(0.95^iterNum))
 		if isRBF10
 			mc_new[(n_mc_old+2):10:n_mc_new] .= eeps #10.0;
 			mc_new[(n_mc_old+5):10:n_mc_new] .= eeps#10.0;
@@ -509,7 +562,8 @@ if !(method == MATBased || method == MATFree)
 		pInv.boundsHigh = boundsHigh;
 		mref_new[1:n_mc_new] = mc_new[1:n_mc_new];
 		# mref_new[end-5*n_Moves_all+1:end-5*(n_Moves_all - nShots)].=0.0;
-		mref_new[(n_mc_new+1):(n_mc_new+5*npc)].=0.0;
+		# the next line tries to make first PC not to move
+		mref_new[(n_mc_new+1):(n_mc_new+5)].=0.0;
 		global mc = mc_new;
 		global nRBF += new_nRBF;
 
@@ -517,17 +571,17 @@ if !(method == MATBased || method == MATFree)
 		#II = speye(Float32,length(mc_new));
 		len = Int64(length(mc_new));
 		IIs = sparse(1.0I,len,len);
-		#IIs.nzval[(n_mc_new+1):(n_mc_new+5*npc)] .= 1e+3;
+		IIs.nzval[(n_mc_new+1):(n_mc_new+5*npc)] .= 1e+4;
 		pInv.regularizer = (m, mref, M)->TikhonovReg(m,mref,M,IIs);
 		
 		if isRBF10
 			spd_reg = (m,mref,M) -> RBF_SPD_regularization(m,mref,nRBF);
 			pInv.regularizer  = [pInv.regularizer;spd_reg];
 			pInv.mref 			  = [mref_new zeros(length(mref_new))];
-			pInv.alpha .*= 0.8;
+			pInv.alpha[1]  = pInv.alpha[1]*0.9;
 		else
 			pInv.mref = mref_new;
-			pInv.alpha *= 0.8;
+			pInv.alpha[1] *= pInv.alpha[1]*0.9;
 		end
 		
 		mc,Dc,flag,his = projGN(mc,pInv,pMisRFs,solveGN=projGNexplicit);
